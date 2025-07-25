@@ -14,6 +14,8 @@ import zhCN from 'antd/locale/zh_CN';
 
 // 导入页面组件
 import ProjectList from './pages/Project/ProjectList';
+import ConnectionStatus from './components/ConnectionStatus';
+import { ConnectionProvider } from './contexts/ConnectionContext';
 
 const { Header, Sider, Content } = Layout;
 const { useToken } = theme;
@@ -57,7 +59,8 @@ function App() {
 
   return (
     <ConfigProvider locale={zhCN}>
-      <Router>
+      <ConnectionProvider>
+        <Router>
         <Layout style={{ minHeight: '100vh' }}>
           {/* 侧边栏 */}
           <Sider
@@ -112,6 +115,7 @@ function App() {
                 弱电工程项目管理系统
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <ConnectionStatus />
                 <span>👨‍💼 张工程师</span>
                 <span style={{ color: token.colorTextSecondary }}>
                   {new Date().toLocaleDateString('zh-CN')}
@@ -146,7 +150,8 @@ function App() {
             </Content>
           </Layout>
         </Layout>
-      </Router>
+              </Router>
+      </ConnectionProvider>
     </ConfigProvider>
   );
 }

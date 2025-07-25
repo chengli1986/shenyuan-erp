@@ -19,7 +19,8 @@ import {
   Typography,
   Row,
   Col,
-  Statistic
+  Statistic,
+  Alert
 } from 'antd';
 import {
   PlusOutlined,
@@ -31,11 +32,13 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { Project, ProjectStatus, PROJECT_STATUS_CONFIG } from '../../types/project';
 import { ProjectService } from '../../services/project';
+import { useConnection } from '../../contexts/ConnectionContext';
 
 const { Title } = Typography;
 const { Option } = Select;
 
 const ProjectList: React.FC = () => {
+  const { setStatus } = useConnection(); // 获取连接状态设置函数
   // 状态管理
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
@@ -44,6 +47,7 @@ const ProjectList: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [connectionError, setConnectionError] = useState<string>('');
 
   // 获取项目列表数据
   const fetchProjects = async () => {
@@ -57,8 +61,11 @@ const ProjectList: React.FC = () => {
       );
       setProjects(response.items);
       setTotal(response.total);
+      setConnectionError(''); // 清除错误信息
     } catch (error) {
       message.error('获取项目列表失败');
+      setConnectionError('无法连接到后端服务，请检查后端是否正常运行');
+      setStatus('disconnected'); // 同时更新全局连接状态
       console.error('Error fetching projects:', error);
     } finally {
       setLoading(false);
@@ -261,6 +268,23 @@ const ProjectList: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* 连接错误提示 */}
+      {connectionError && (
+        <Alert
+          message="后端连接失败"
+          description={connectionError}
+          type="error"
+          showIcon
+          closable
+          style={{ marginBottom: '24px' }}
+          action={
+            <Button size="small" onClick={fetchProjects}>
+              重试连接
+            </Button>
+          }
+        />
+      )}
 
       {/* 搜索和筛选 */}
       <Card style={{ marginBottom: '24px' }}>
