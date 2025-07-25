@@ -9,6 +9,7 @@ env/
 ENV/
 .venv/
 .env/
+backend/venv/
 
 # Python缓存
 __pycache__/
@@ -234,4 +235,5 @@ docs/build/
 !package.json
 !package-lock.json
 !README.md
+!backend/app/core/
 !.gitignore
