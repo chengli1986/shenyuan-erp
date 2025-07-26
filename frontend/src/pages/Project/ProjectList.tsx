@@ -33,6 +33,9 @@ import type { ColumnsType } from 'antd/es/table';
 import { Project, ProjectStatus, PROJECT_STATUS_CONFIG } from '../../types/project';
 import { ProjectService } from '../../services/project';
 import { useConnection } from '../../contexts/ConnectionContext';
+import CreateProjectModal from '../../components/CreateProjectModal';
+import EditProjectModal from '../../components/EditProjectModal';
+import ProjectFileManager from '../../components/ProjectFileManager';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -48,6 +51,11 @@ const ProjectList: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [connectionError, setConnectionError] = useState<string>('');
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
+  const [fileManagerVisible, setFileManagerVisible] = useState(false);
+  const [fileManagerProject, setFileManagerProject] = useState<Project | null>(null);
 
   // 获取项目列表数据
   const fetchProjects = async () => {
@@ -86,6 +94,30 @@ const ProjectList: React.FC = () => {
     } catch (error) {
       message.error('删除项目失败');
     }
+  };
+
+  // 处理新建项目成功
+  const handleCreateSuccess = (newProject: Project) => {
+    message.success(`项目 "${newProject.project_name}" 已添加到列表`);
+    fetchProjects(); // 刷新项目列表
+  };
+
+  // 处理编辑项目
+  const handleEdit = (project: Project) => {
+    setEditingProjectId(project.id);
+    setEditModalVisible(true);
+  };
+
+  // 处理编辑项目成功
+  const handleEditSuccess = (updatedProject: Project) => {
+    message.success(`项目 "${updatedProject.project_name}" 更新成功`);
+    fetchProjects(); // 刷新项目列表
+  };
+
+  // 处理文件管理
+  const handleFileManager = (project: Project) => {
+    setFileManagerProject(project);
+    setFileManagerVisible(true);
   };
 
   // 格式化金额显示
@@ -184,15 +216,15 @@ const ProjectList: React.FC = () => {
             type="link" 
             icon={<EyeOutlined />} 
             size="small"
-            onClick={() => message.info('查看详情功能开发中...')}
+            onClick={() => handleFileManager(record)}
           >
-            查看
+            文件
           </Button>
           <Button 
             type="link" 
             icon={<EditOutlined />} 
             size="small"
-            onClick={() => message.info('编辑功能开发中...')}
+            onClick={() => handleEdit(record)}
           >
             编辑
           </Button>
@@ -238,7 +270,7 @@ const ProjectList: React.FC = () => {
           <Button 
             type="primary" 
             icon={<PlusOutlined />}
-            onClick={() => message.info('新建项目功能开发中...')}
+            onClick={() => setCreateModalVisible(true)}
           >
             新建项目
           </Button>
@@ -342,6 +374,37 @@ const ProjectList: React.FC = () => {
           }}
         />
       </Card>
+
+      {/* 新建项目弹窗 */}
+      <CreateProjectModal
+        visible={createModalVisible}
+        onCancel={() => setCreateModalVisible(false)}
+        onSuccess={handleCreateSuccess}
+      />
+
+      {/* 编辑项目弹窗 */}
+      <EditProjectModal
+        visible={editModalVisible}
+        projectId={editingProjectId}
+        onCancel={() => {
+          setEditModalVisible(false);
+          setEditingProjectId(null);
+        }}
+        onSuccess={handleEditSuccess}
+      />
+
+      {/* 文件管理弹窗 */}
+      {fileManagerProject && (
+        <ProjectFileManager
+          projectId={fileManagerProject.id}
+          projectName={fileManagerProject.project_name}
+          visible={fileManagerVisible}
+          onCancel={() => {
+            setFileManagerVisible(false);
+            setFileManagerProject(null);
+          }}
+        />
+      )}
     </div>
   );
 };

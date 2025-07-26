@@ -6,16 +6,21 @@ API v1版本路由汇总
 """
 
 from fastapi import APIRouter
-from . import projects
+from . import projects, project_files
 
 # 创建v1版本的主路由
 api_router = APIRouter()
 
 # 注册项目相关的API路由
-# prefix="/projects" 意思是所有项目API都以 /projects 开头
-# tags=["projects"] 用于API文档分类，让文档更整洁
 api_router.include_router(
     projects.router, 
     prefix="/projects", 
     tags=["projects"]
+)
+
+# 注册项目文件相关的API路由
+api_router.include_router(
+    project_files.router,
+    prefix="/projects", 
+    tags=["project-files"]
 )

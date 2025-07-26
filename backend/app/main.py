@@ -9,6 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 # 导入数据库相关
 from app.core.database import engine, Base
 
+# 导入所有模型（确保数据库表创建）
+from app.models import project, project_file
+
 # 导入API路由
 from app.api.v1 import api_router
 
