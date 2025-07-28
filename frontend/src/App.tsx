@@ -1,6 +1,6 @@
 // frontend/src/App.tsx
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { ConfigProvider, Layout, Menu, theme } from 'antd';
 import {
   ProjectOutlined,
@@ -8,20 +8,25 @@ import {
   ShoppingCartOutlined,
   InboxOutlined,
   BarChartOutlined,
-  UserOutlined
+  UserOutlined,
+  ExperimentOutlined
 } from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
 
 // 导入页面组件
 import ProjectList from './pages/Project/ProjectList';
+import SystemTestDashboard from './pages/SystemTest/SystemTestDashboard';
 import ConnectionStatus from './components/ConnectionStatus';
 import { ConnectionProvider } from './contexts/ConnectionContext';
 
 const { Header, Sider, Content } = Layout;
 const { useToken } = theme;
 
-function App() {
+// 主应用组件（需要在Router内部）
+function AppContent() {
   const { token } = useToken();
+  const navigate = useNavigate();
+  const location = useLocation();
   
   // 菜单项配置
   const menuItems = [
@@ -55,13 +60,15 @@ function App() {
       icon: <UserOutlined />,
       label: '用户管理',
     },
+    {
+      key: '/system-test',
+      icon: <ExperimentOutlined />,
+      label: '系统测试',
+    },
   ];
 
   return (
-    <ConfigProvider locale={zhCN}>
-      <ConnectionProvider>
-        <Router>
-        <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: '100vh' }}>
           {/* 侧边栏 */}
           <Sider
             width={256}
@@ -88,12 +95,14 @@ function App() {
             {/* 导航菜单 */}
             <Menu
               mode="inline"
-              defaultSelectedKeys={['/projects']}
+              selectedKeys={[location.pathname]}
               style={{ borderRight: 0, paddingTop: '16px' }}
               items={menuItems}
               onClick={({ key }) => {
-                // 这里可以添加页面跳转逻辑
-                if (key !== '/projects') {
+                if (key === '/projects' || key === '/system-test') {
+                  // 已开发的功能，进行路由跳转
+                  navigate(key);
+                } else {
                   // 暂时显示提示信息
                   console.log(`${key} 功能开发中...`);
                 }
@@ -135,6 +144,9 @@ function App() {
                 {/* 项目管理页面 */}
                 <Route path="/projects" element={<ProjectList />} />
                 
+                {/* 系统测试页面 */}
+                <Route path="/system-test" element={<SystemTestDashboard />} />
+                
                 {/* 其他页面暂时显示开发中 */}
                 <Route path="/*" element={
                   <div style={{ 
@@ -150,7 +162,17 @@ function App() {
             </Content>
           </Layout>
         </Layout>
-              </Router>
+  );
+}
+
+// 主App组件
+function App() {
+  return (
+    <ConfigProvider locale={zhCN}>
+      <ConnectionProvider>
+        <Router>
+          <AppContent />
+        </Router>
       </ConnectionProvider>
     </ConfigProvider>
   );

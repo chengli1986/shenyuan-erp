@@ -32,9 +32,13 @@ class TestContractModels:
         """每个测试方法前的准备工作"""
         self.db = self.SessionLocal()
         
+        # 为每个测试创建唯一的项目代码，避免冲突
+        import uuid
+        unique_code = f"TEST_{str(uuid.uuid4())[:8]}"
+        
         # 创建测试项目
         self.test_project = Project(
-            project_code="TEST001",
+            project_code=unique_code,
             project_name="合同清单测试项目",
             contract_amount=1000000.00,
             project_manager="测试工程师"
@@ -45,7 +49,13 @@ class TestContractModels:
     
     def teardown_method(self):
         """每个测试方法后的清理工作"""
+        self.db.rollback()
         self.db.close()
+        
+    @classmethod
+    def teardown_class(cls):
+        """测试类清理"""
+        cls.engine.dispose()
     
     def test_contract_file_version_creation(self):
         """测试合同清单版本创建"""
