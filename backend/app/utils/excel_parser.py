@@ -77,8 +77,8 @@ class ContractExcelParser:
         """
         # 常见的表头关键词
         header_keywords = [
-            '序号', '设备名称', '品牌型号', '规格', '单位', '数量', '单价',
-            '总价', '金额', '备注', '原产地', '型号', '名称'
+            '序号', '设备名称', '设备品牌', '设备型号', '品牌型号', '规格', '单位', '数量', '单价',
+            '综合单价', '合价', '总价', '金额', '备注', '原产地', '型号', '名称'
         ]
         
         for row_num in range(1, min(max_scan_rows + 1, worksheet.max_row + 1)):
@@ -183,8 +183,23 @@ class ContractExcelParser:
         # 重置索引
         df = df.reset_index(drop=True)
         
-        # 标准化列名
-        df.columns = [self._normalize_column_name(col) for col in df.columns]
+        # 标准化列名，处理重复列名
+        new_columns = []
+        column_counts = {}
+        
+        for col in df.columns:
+            normalized = self._normalize_column_name(col)
+            
+            # 处理重复列名
+            if normalized in column_counts:
+                column_counts[normalized] += 1
+                normalized = f"{normalized}_{column_counts[normalized]}"
+            else:
+                column_counts[normalized] = 0
+            
+            new_columns.append(normalized)
+        
+        df.columns = new_columns
         
         return df
     
@@ -208,14 +223,19 @@ class ContractExcelParser:
             '序号': 'serial_number',
             '设备名称': 'item_name',
             '名称': 'item_name',
-            '品牌型号': 'brand_model',
-            '型号': 'brand_model',
-            '规格': 'specification',
+            '设备品牌': 'brand_model',  # 新格式：设备品牌映射到brand_model
+            '品牌型号': 'brand_model',  # 旧格式：保持兼容
+            '设备型号': 'specification',  # 新格式：设备型号映射到specification
+            '型号': 'specification',    # 简化格式
+            '规格': 'specification',    # 保持兼容  
+            '技术规格参数': 'specification',  # 旧格式兼容
             '规格描述': 'specification',
             '单位': 'unit',
             '数量': 'quantity',
             '单价': 'unit_price',
+            '综合单价': 'unit_price',  # 新格式
             '价格': 'unit_price',
+            '合价': 'total_price',     # 新格式
             '总价': 'total_price',
             '金额': 'total_price',
             '原产地': 'origin_place',
@@ -280,8 +300,15 @@ class ContractExcelParser:
         important_fields = ['item_name', 'brand_model', 'quantity']
         
         for field in important_fields:
-            if field in row and pd.notna(row[field]) and str(row[field]).strip():
-                return False
+            try:
+                if field in row.index:
+                    value = row[field]
+                    if pd.notna(value):
+                        str_value = str(value).strip()
+                        if str_value:
+                            return False
+            except (KeyError, AttributeError):
+                continue
         
         return True
     
@@ -348,12 +375,15 @@ class ContractExcelParser:
         Returns:
             Any: 列值或默认值
         """
-        if column in row and pd.notna(row[column]):
-            value = row[column]
-            # 将值转换为字符串并strip
-            if value is not None:
-                return str(value).strip()
-            return value
+        try:
+            if column in row.index and pd.notna(row[column]):
+                value = row[column]
+                # 将值转换为字符串并strip
+                if value is not None:
+                    return str(value).strip()
+                return value
+        except (KeyError, AttributeError):
+            pass
         return default
     
     def _parse_decimal(self, row: pd.Series, column: str) -> Optional[Decimal]:
@@ -397,12 +427,16 @@ class ContractExcelParser:
             str: 物料类型（主材或辅材）
         """
         # 如果有item_type列，直接使用
-        item_type = self._safe_get_value(row, 'item_type', '').strip()
-        if item_type in ['主材', '辅材']:
-            return item_type
+        item_type = self._safe_get_value(row, 'item_type', '')
+        if item_type and str(item_type).strip() in ['主材', '辅材']:
+            return str(item_type).strip()
         
         # 根据设备名称判断
-        item_name = self._safe_get_value(row, 'item_name', '').lower()
+        item_name = self._safe_get_value(row, 'item_name', '')
+        if not item_name:
+            return '主材'
+            
+        item_name_str = str(item_name).lower()
         
         # 辅材关键词
         auxiliary_keywords = [
@@ -411,7 +445,7 @@ class ContractExcelParser:
         ]
         
         for keyword in auxiliary_keywords:
-            if keyword in item_name:
+            if keyword in item_name_str:
                 return '辅材'
         
         # 默认为主材

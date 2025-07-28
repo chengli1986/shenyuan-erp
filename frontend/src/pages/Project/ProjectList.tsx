@@ -20,14 +20,16 @@ import {
   Row,
   Col,
   Statistic,
-  Alert
+  Alert,
+  Modal
 } from 'antd';
 import {
   PlusOutlined,
   SearchOutlined,
   EditOutlined,
   DeleteOutlined,
-  EyeOutlined
+  EyeOutlined,
+  FileTextOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { Project, ProjectStatus, PROJECT_STATUS_CONFIG } from '../../types/project';
@@ -36,6 +38,7 @@ import { useConnection } from '../../contexts/ConnectionContext';
 import CreateProjectModal from '../../components/CreateProjectModal';
 import EditProjectModal from '../../components/EditProjectModal';
 import ProjectFileManager from '../../components/ProjectFileManager';
+import ContractManagement from '../Contract/ContractManagement';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -56,6 +59,8 @@ const ProjectList: React.FC = () => {
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
   const [fileManagerVisible, setFileManagerVisible] = useState(false);
   const [fileManagerProject, setFileManagerProject] = useState<Project | null>(null);
+  const [contractManagementVisible, setContractManagementVisible] = useState(false);
+  const [contractManagementProject, setContractManagementProject] = useState<Project | null>(null);
 
   // 获取项目列表数据
   const fetchProjects = async () => {
@@ -118,6 +123,12 @@ const ProjectList: React.FC = () => {
   const handleFileManager = (project: Project) => {
     setFileManagerProject(project);
     setFileManagerVisible(true);
+  };
+
+  // 处理合同清单管理
+  const handleContractManagement = (project: Project) => {
+    setContractManagementProject(project);
+    setContractManagementVisible(true);
   };
 
   // 格式化金额显示
@@ -208,10 +219,18 @@ const ProjectList: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space size="small">
+          <Button 
+            type="link" 
+            icon={<FileTextOutlined />} 
+            size="small"
+            onClick={() => handleContractManagement(record)}
+          >
+            合同清单
+          </Button>
           <Button 
             type="link" 
             icon={<EyeOutlined />} 
@@ -404,6 +423,23 @@ const ProjectList: React.FC = () => {
             setFileManagerProject(null);
           }}
         />
+      )}
+
+      {/* 合同清单管理弹窗 */}
+      {contractManagementProject && (
+        <Modal
+          title={`合同清单管理 - ${contractManagementProject.project_name}`}
+          open={contractManagementVisible}
+          onCancel={() => {
+            setContractManagementVisible(false);
+            setContractManagementProject(null);
+          }}
+          footer={null}
+          width="90%"
+          style={{ top: 20 }}
+        >
+          <ContractManagement projectId={contractManagementProject.id} />
+        </Modal>
       )}
     </div>
   );

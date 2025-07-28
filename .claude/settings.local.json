@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(claude --usage)"
+      "Bash(claude --usage)",
+      "Bash(python:*)",
+      "Bash(taskkill:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)"
     ],
     "deny": []
   }

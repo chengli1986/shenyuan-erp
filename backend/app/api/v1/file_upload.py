@@ -130,8 +130,7 @@ async def upload_contract_excel(
         parser.load_excel_file(file_path)
         parsed_result = parser.parse_all_sheets()
         
-        # 开始数据库事务
-        db.begin()
+        # SQLAlchemy会自动管理事务，不需要手动begin()
         
         # 创建合同清单版本
         latest_version = db.query(ContractFileVersion).filter(
@@ -333,9 +332,6 @@ async def delete_contract_file(
         raise HTTPException(status_code=400, detail="不能删除当前生效的版本")
     
     try:
-        # 开始事务
-        db.begin()
-        
         # 删除设备明细
         db.query(ContractItem).filter(ContractItem.version_id == version_id).delete()
         

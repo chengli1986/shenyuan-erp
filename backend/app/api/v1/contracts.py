@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import math
+import logging
 
 from app.core.database import get_db
 from app.models.project import Project
@@ -37,6 +38,9 @@ from app.schemas.contract import (
 
 # 创建路由器
 router = APIRouter()
+
+# 配置日志
+logger = logging.getLogger(__name__)
 
 
 # ============================
@@ -160,39 +164,108 @@ async def create_contract_version(
 # 系统分类管理 API
 # ============================
 
-@router.get("/projects/{project_id}/versions/{version_id}/categories", response_model=List[SystemCategoryResponse])
-async def get_system_categories(
-    project_id: int = Path(..., description="项目ID"),
-    version_id: int = Path(..., description="版本ID"),
+@router.get("/test")
+async def test_api():
+    """测试API是否工作"""
+    return {"status": "working"}
+
+@router.get("/test-pagination")
+async def test_pagination(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
-    """
-    获取指定版本的所有系统分类
-    """
-    
-    # 验证版本是否存在
-    version = db.query(ContractFileVersion).filter(
-        ContractFileVersion.id == version_id,
-        ContractFileVersion.project_id == project_id
-    ).first()
-    
-    if not version:
-        raise HTTPException(status_code=404, detail="指定的版本不存在")
-    
-    # 查询系统分类
+    """测试分页功能"""
+    try:
+        query = db.query(ContractItem).filter(
+            ContractItem.version_id == 7,
+            ContractItem.is_active == True
+        )
+        
+        total = query.count()
+        offset = (page - 1) * size
+        items = query.offset(offset).limit(size).all()
+        
+        # 手动转换为简单字典
+        simple_items = []
+        for item in items:
+            simple_items.append({
+                "id": item.id,
+                "item_name": item.item_name,
+                "brand_model": item.brand_model,
+                "specification": item.specification
+            })
+        
+        return {
+            "items": simple_items,
+            "total": total,
+            "page": page,
+            "size": size,
+            "count": len(simple_items)
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@router.get("/projects/{project_id}/versions/{version_id}/categories")
+async def get_system_categories_list(project_id: int, version_id: int, db: Session = Depends(get_db)):
+    """Get system categories for a specific version"""
     categories = db.query(SystemCategory).filter(
+        SystemCategory.project_id == project_id,
         SystemCategory.version_id == version_id
     ).all()
     
-    # 更新每个分类的设备数量
+    # 转换为响应格式
+    result = []
     for category in categories:
-        items_count = db.query(ContractItem).filter(
-            ContractItem.category_id == category.id,
-            ContractItem.is_active == True
-        ).count()
-        category.total_items_count = items_count
+        result.append({
+            "id": category.id,
+            "project_id": category.project_id,
+            "version_id": category.version_id,
+            "category_name": category.category_name,
+            "category_code": category.category_code,
+            "excel_sheet_name": category.excel_sheet_name,
+            "budget_amount": str(category.budget_amount) if category.budget_amount else "0",
+            "total_items_count": category.total_items_count,
+            "description": category.description,
+            "remarks": category.remarks,
+            "created_at": category.created_at.isoformat() if category.created_at else None,
+            "updated_at": category.updated_at.isoformat() if category.updated_at else None
+        })
     
-    return categories
+    return result
+
+@router.get("/projects/{project_id}/versions/{version_id}/categories-working")
+async def get_system_categories_working(project_id: int, version_id: int, db: Session = Depends(get_db)):
+    """Get system categories for a specific version - proper implementation"""
+    try:
+        categories = db.query(SystemCategory).filter(
+            SystemCategory.project_id == project_id,
+            SystemCategory.version_id == version_id
+        ).all()
+        
+        # 转换为响应格式
+        result = []
+        for category in categories:
+            result.append({
+                "id": category.id,
+                "project_id": category.project_id,
+                "version_id": category.version_id,
+                "category_name": category.category_name,
+                "category_code": category.category_code,
+                "excel_sheet_name": category.excel_sheet_name,
+                "budget_amount": str(category.budget_amount) if category.budget_amount else "0",
+                "total_items_count": category.total_items_count,
+                "description": category.description,
+                "remarks": category.remarks,
+                "created_at": category.created_at.isoformat() if category.created_at else None,
+                "updated_at": category.updated_at.isoformat() if category.updated_at else None
+            })
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"获取系统分类失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取系统分类失败: {str(e)}")
 
 
 @router.post("/projects/{project_id}/versions/{version_id}/categories", response_model=SystemCategoryResponse)
@@ -247,7 +320,7 @@ async def create_system_category(
 # 合同清单明细管理 API
 # ============================
 
-@router.get("/projects/{project_id}/versions/{version_id}/items", response_model=ContractItemListResponse)
+@router.get("/projects/{project_id}/versions/{version_id}/items")
 async def get_contract_items(
     project_id: int = Path(..., description="项目ID"),
     version_id: int = Path(..., description="版本ID"),
@@ -303,13 +376,16 @@ async def get_contract_items(
     # 计算总页数
     pages = math.ceil(total / size)
     
-    return ContractItemListResponse(
-        items=items,
-        total=total,
-        page=page,
-        size=size,
-        pages=pages
-    )
+    # 将数据库对象转换为字典格式，避免Pydantic序列化问题
+    items_dict = [item.to_dict() for item in items]
+    
+    return {
+        "items": items_dict,
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": pages
+    }
 
 
 @router.post("/projects/{project_id}/versions/{version_id}/items", response_model=ContractItemResponse)
