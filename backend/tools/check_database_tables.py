@@ -8,7 +8,7 @@ import os
 def check_database_tables():
     """检查数据库表结构"""
     
-    db_path = os.path.join(os.path.dirname(__file__), 'erp.db')
+    db_path = os.path.join(os.path.dirname(__file__), '..', 'erp_test.db')
     
     if not os.path.exists(db_path):
         print(f"[ERROR] 数据库文件不存在: {db_path}")

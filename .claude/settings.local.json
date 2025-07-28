@@ -5,7 +5,14 @@
       "Bash(python:*)",
       "Bash(taskkill:*)",
       "Bash(curl:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(echo)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
