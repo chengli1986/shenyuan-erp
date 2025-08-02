@@ -37,7 +37,9 @@
       "Bash(sudo kill:*)",
       "Bash(wetty:*)",
       "Bash(systemctl status:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(./scripts/stop-erp.sh:*)",
+      "Bash(./scripts/start-erp-dev.sh:*)"
     ],
     "deny": []
   }
