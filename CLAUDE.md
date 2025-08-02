@@ -82,3 +82,39 @@
   - 清理所有未使用的import
   - 前端环境变量必须在npm start前设置
   - CORS配置必须包含所有前端访问端口
+
+  ## 重要技术突破 (2025-08-02)
+
+  ### AWS c7i-flex.large环境成功配置
+  - 服务器配置升级至c7i-flex.large，完全支持Claude Code编译环境
+  - VSCode Remote SSH稳定运行，实现云端开发环境
+  - 公网IP: 18.219.25.24，支持多种访问方式
+
+  ### 开发生产环境完全分离
+  - **开发模式**(scripts/start-erp-dev.sh): React热重载 + localhost API连接
+  - **生产模式**(scripts/start-erp-prod.sh): 静态优化服务器 + 公网API连接
+  - 完美支持VSCode Remote SSH + Claude Code开发工作流
+
+  ### 网络访问机制理解
+  - 服务绑定0.0.0.0同时支持localhost和公网IP访问
+  - localhost:8000/3000 - 开发调试最优选择
+  - 18.219.25.24:8000/3000 - 远程访问和演示
+  - 前后端通信: React(浏览器) → localhost:8000 → FastAPI(服务器)
+
+  ### 关键问题解决模式
+  1. **端口冲突处理**: 先停止服务./scripts/stop-erp.sh，强制清理残留进程
+  2. **服务启动失败**: 检查端口占用 `sudo netstat -tlnp | grep :端口`
+  3. **前端连接失败**: 验证CORS配置包含所有前端访问端口
+  4. **进程管理**: 使用scripts/目录统一管理，避免手动kill进程
+
+  ## 项目文档体系
+  - README.md: 项目总览和快速开始
+  - scripts/README.md: 详细脚本使用文档  
+  - docs/网络访问原理学习指南.md: 深度技术学习资料
+  - CLAUDE.md: 开发记录和问题解决历史
+
+  ## 未来开发要点
+  - 使用./scripts/start-erp-dev.sh启动开发环境
+  - 遇到问题先查看故障排除文档和学习指南
+  - 新功能开发前先阅读网络访问原理理解前后端通信
+  - 定期备份重要配置和数据库文件
