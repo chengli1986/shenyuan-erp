@@ -20,7 +20,6 @@ const ConnectionContext = createContext<ConnectionContextType | undefined>(undef
 export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [status, setStatus] = useState<ConnectionStatus>('checking');
   const [lastCheck, setLastCheck] = useState<Date>(new Date());
-  const [checkTrigger, setCheckTrigger] = useState(0);
 
   const updateStatus = useCallback((newStatus: ConnectionStatus) => {
     setStatus(newStatus);
@@ -28,7 +27,7 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   const triggerCheck = useCallback(() => {
-    setCheckTrigger(prev => prev + 1);
+    // Trigger check logic can be implemented here
   }, []);
 
   return (

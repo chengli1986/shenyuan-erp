@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
       "Bash(claude --usage)",
@@ -16,7 +17,27 @@
       "Bash(pip install:*)",
       "Bash(npm install:*)",
       "Bash(npm run build:*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(ss:*)",
+      "Bash(chmod:*)",
+      "Bash(./start-erp.sh:*)",
+      "Bash(grep:*)",
+      "Bash(sudo netstat:*)",
+      "Bash(./start-erp-prod.sh:*)",
+      "Bash(./stop-erp.sh:*)",
+      "Bash(cat:*)",
+      "Bash(serve --help)",
+      "Bash(sudo ln:*)",
+      "Bash(sudo rm:*)",
+      "Bash(sudo nginx:*)",
+      "Bash(sudo cp:*)",
+      "Bash(sudo systemctl:*)",
+      "Bash(sudo tail:*)",
+      "Bash(./start-erp-dev.sh:*)",
+      "Bash(sudo kill:*)",
+      "Bash(wetty:*)",
+      "Bash(systemctl status:*)",
+      "Bash(kill:*)"
     ],
     "deny": []
   }

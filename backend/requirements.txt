@@ -12,5 +12,13 @@ pydantic-settings==2.1.0
 # 开发和调试工具
 python-dotenv==1.0.0
 
+# Excel处理
+pandas==2.1.4
+openpyxl==3.1.2
+
+# 测试相关
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
 # 其他工具
 pathlib2==2.3.7

@@ -4,7 +4,7 @@
  * 包含文件上传、列表显示、下载、删除等功能
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Upload,
@@ -32,7 +32,6 @@ import {
   DownloadOutlined,
   DeleteOutlined,
   EyeOutlined,
-  FileTextOutlined,
   InboxOutlined,
   CloudUploadOutlined,
   FolderOpenOutlined
@@ -132,7 +131,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({
   ];
 
   // 获取文件列表
-  const fetchFiles = async () => {
+  const fetchFiles = useCallback(async () => {
     setLoading(true);
     try {
       const response = await ProjectFileService.getProjectFiles(
@@ -146,10 +145,10 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, filterType]);
 
   // 获取文件系统配置
-  const fetchFileConfig = async () => {
+  const fetchFileConfig = useCallback(async () => {
     try {
       const config = await ProjectFileService.getFileSystemConfig();
       setFileConfig(config);
@@ -164,7 +163,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({
         max_file_size_mb: 50
       });
     }
-  };
+  }, []);
 
   // 组件挂载时获取数据
   useEffect(() => {
@@ -172,7 +171,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({
       fetchFiles();
       fetchFileConfig();
     }
-  }, [visible, projectId, filterType]);
+  }, [visible, fetchFiles, fetchFileConfig]);
 
   // 处理文件上传
   const handleUpload = async (values: any) => {

@@ -4,7 +4,7 @@
  * 实时监控后端API服务状态
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { Badge, Tooltip, Space, Typography } from 'antd';
 import { 
   CheckCircleOutlined, 
@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons';
 import axios from 'axios';
 import { useConnection } from '../contexts/ConnectionContext';
+import { API_BASE_URL } from '../config/api';
 
 const { Text } = Typography;
 
@@ -26,15 +27,15 @@ const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
   showText = true, 
   size = 'default' 
 }) => {
-  const { status, lastCheck, setStatus, triggerCheck } = useConnection();
+  const { status, lastCheck, setStatus } = useConnection();
 
   // 检查后端连接状态
-  const checkConnection = async () => {
+  const checkConnection = useCallback(async () => {
     try {
       setStatus('checking');
       
       // 调用后端健康检查接口
-      const response = await axios.get('http://localhost:8000/health', {
+      const response = await axios.get(`${API_BASE_URL}/health`, {
         timeout: 3000, // 缩短到3秒超时，更快响应
       });
       
@@ -47,7 +48,7 @@ const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
       console.warn('后端连接检查失败:', error);
       setStatus('disconnected');
     }
-  };
+  }, [setStatus]);
 
   // 组件挂载时检查连接，然后每10秒检查一次
   useEffect(() => {
@@ -56,7 +57,7 @@ const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
     const interval = setInterval(checkConnection, 10000); // 改为10秒检查一次，更及时
     
     return () => clearInterval(interval);
-  }, []);
+  }, [checkConnection]);
 
   // 状态配置
   const statusConfig = {

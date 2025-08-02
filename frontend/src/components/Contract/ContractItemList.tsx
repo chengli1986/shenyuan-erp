@@ -3,7 +3,7 @@
  * 合同清单明细列表组件
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table,
   Card,
@@ -29,7 +29,6 @@ import type { ColumnsType } from 'antd/es/table';
 import {
   ContractItem,
   ContractFileVersion,
-  ContractItemListResponse,
   SystemCategory,
   ItemType
 } from '../../types/contract';
@@ -79,7 +78,7 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
   const [editVisible, setEditVisible] = useState(false);
 
   // 加载系统分类
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     if (!currentVersion) return;
     
     try {
@@ -88,10 +87,10 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
     } catch (error) {
       console.error('加载系统分类失败:', error);
     }
-  };
+  }, [currentVersion, projectId, refreshKey]);
 
   // 加载设备清单
-  const loadItems = async (page = 1, size = 20) => {
+  const loadItems = useCallback(async (page = 1, size = 20) => {
     console.log('=== loadItems调用 ===');
     console.log('currentVersion:', currentVersion);
     console.log('projectId:', projectId);
@@ -128,7 +127,7 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentVersion, projectId, filters, refreshKey]);
 
   // 处理搜索
   const handleSearch = (value: string) => {
@@ -326,11 +325,11 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
 
   useEffect(() => {
     loadCategories();
-  }, [currentVersion, refreshKey]);
+  }, [loadCategories]);
 
   useEffect(() => {
     loadItems();
-  }, [currentVersion, refreshKey]);
+  }, [loadItems]);
 
   console.log('=== ContractItemList render ===');
   console.log('currentVersion in render:', currentVersion);

@@ -18,9 +18,10 @@ import {
   ContractFileListResponse,
   FileUploadFormData
 } from '../types/contract';
+import { API_URL } from '../config/api';
 
 // API基础URL
-const API_BASE = 'http://localhost:8000/api/v1';
+const API_BASE = API_URL;
 
 // 通用请求处理函数
 async function handleResponse<T>(response: Response): Promise<T> {

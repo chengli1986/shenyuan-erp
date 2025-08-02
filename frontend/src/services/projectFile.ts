@@ -12,10 +12,11 @@ import {
   FileType,
   BatchUploadItem
 } from '../types/projectFile';
+import { API_URL } from '../config/api';
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api/v1',
+  baseURL: API_URL,
   timeout: 30000, // 文件上传需要更长的超时时间
 });
 

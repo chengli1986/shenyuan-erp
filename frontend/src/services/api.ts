@@ -3,10 +3,11 @@
  */
 
 import axios from 'axios';
+import { API_URL } from '../config/api';
 
 // 创建axios实例，配置基础URL
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api/v1',
+  baseURL: API_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

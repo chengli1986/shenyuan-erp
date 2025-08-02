@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Modal, Descriptions, Tag, Space, Typography } from 'antd';
+import { Modal, Descriptions, Tag, Typography } from 'antd';
 import { ContractItem, ItemType } from '../../types/contract';
 import { formatAmount } from '../../services/contract';
 

@@ -2,7 +2,7 @@
  * 系统测试仪表板页面
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Card, 
   Row, 
@@ -15,15 +15,12 @@ import {
   Space,
   Progress,
   Alert,
-  Spin,
   Tooltip,
   Badge,
   Modal,
-  Descriptions,
   Collapse,
   Typography,
-  Select,
-  DatePicker
+  Select
 } from 'antd';
 import {
   PlayCircleOutlined,
@@ -40,7 +37,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
 import { testService } from '../../services/test';
-import { TestRun, TestResult, LatestTestStatus } from '../../types/test';
+import { TestRun, LatestTestStatus } from '../../types/test';
 import TestResultDetail from './TestResultDetail';
 import TestStatisticsChart from './TestStatisticsChart';
 
@@ -49,7 +46,6 @@ dayjs.locale('zh-cn');
 
 const { Panel } = Collapse;
 const { Text } = Typography;
-const { RangePicker } = DatePicker;
 
 const SystemTestDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -71,7 +67,7 @@ const SystemTestDashboard: React.FC = () => {
   });
 
   // 加载测试运行列表
-  const loadTestRuns = async () => {
+  const loadTestRuns = useCallback(async () => {
     setLoading(true);
     try {
       const response = await testService.getTestRuns({
@@ -89,17 +85,17 @@ const SystemTestDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [pagination.current, pagination.pageSize, filters]);
 
   // 加载最新状态
-  const loadLatestStatus = async () => {
+  const loadLatestStatus = useCallback(async () => {
     try {
       const status = await testService.getLatestTestStatus();
       setLatestStatus(status);
     } catch (error) {
       console.error('加载最新状态失败:', error);
     }
-  };
+  }, []);
 
   // 触发测试
   const triggerTest = async (testType: 'all' | 'unit' | 'integration') => {
@@ -149,7 +145,7 @@ const SystemTestDashboard: React.FC = () => {
   useEffect(() => {
     loadTestRuns();
     loadLatestStatus();
-  }, [pagination.current, pagination.pageSize, filters]);
+  }, [loadTestRuns, loadLatestStatus]);
 
   const columns = [
     {
