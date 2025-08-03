@@ -35,6 +35,8 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import 'dayjs/locale/zh-cn';
 import { testService } from '../../services/test';
 import { TestRun, LatestTestStatus } from '../../types/test';
@@ -42,7 +44,11 @@ import TestResultDetail from './TestResultDetail';
 import TestStatisticsChart from './TestStatisticsChart';
 
 dayjs.extend(relativeTime);
+dayjs.extend(utc);
+dayjs.extend(timezone);
 dayjs.locale('zh-cn');
+// 设置默认时区为用户本地时区
+dayjs.tz.setDefault(dayjs.tz.guess());
 
 const { Panel } = Collapse;
 const { Text } = Typography;
@@ -97,27 +103,24 @@ const SystemTestDashboard: React.FC = () => {
     }
   }, []);
 
-  // 触发测试
-  const triggerTest = async (testType: 'all' | 'unit' | 'integration') => {
-    Modal.confirm({
-      title: '确认触发测试',
-      content: `确定要触发${testType === 'all' ? '全部' : testType === 'unit' ? '单元' : '集成'}测试吗？`,
-      onOk: async () => {
-        setRefreshing(true);
-        try {
-          const result = await testService.triggerTestRun(testType);
-          message.success(result.message);
-          // 刷新列表
-          await loadTestRuns();
-          await loadLatestStatus();
-        } catch (error: any) {
-          message.error(error.response?.data?.detail || '触发测试失败');
-        } finally {
-          setRefreshing(false);
-        }
-      }
-    });
-  };
+  // 触发测试 - 简化版本，直接触发不需要确认
+  const triggerTest = useCallback(async (testType: 'all' | 'unit' | 'integration') => {
+    console.log('触发测试:', testType);
+    setRefreshing(true);
+    try {
+      const result = await testService.triggerTestRun(testType);
+      console.log('测试触发结果:', result);
+      message.success(result.message || '测试已触发');
+      // 刷新列表
+      await loadTestRuns();
+      await loadLatestStatus();
+    } catch (error: any) {
+      console.error('触发测试失败:', error);
+      message.error(error.response?.data?.detail || error.message || '触发测试失败');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadTestRuns, loadLatestStatus]);
 
   // 获取状态标签
   const getStatusTag = (status: string) => {
@@ -221,7 +224,10 @@ const SystemTestDashboard: React.FC = () => {
       dataIndex: 'start_time',
       key: 'start_time',
       width: 180,
-      render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm:ss')
+      render: (time: string) => {
+        // 将UTC时间转换为本地时间
+        return dayjs.utc(time).local().format('YYYY-MM-DD HH:mm:ss');
+      }
     }
   ];
 
@@ -246,21 +252,30 @@ const SystemTestDashboard: React.FC = () => {
               <Button
                 icon={<PlayCircleOutlined />}
                 type="primary"
-                onClick={() => triggerTest('all')}
+                onClick={() => {
+                  console.log('全部测试按钮点击');
+                  triggerTest('all');
+                }}
                 loading={refreshing}
               >
                 运行全部测试
               </Button>
               <Button
                 icon={<PlayCircleOutlined />}
-                onClick={() => triggerTest('unit')}
+                onClick={() => {
+                  console.log('单元测试按钮点击');
+                  triggerTest('unit');
+                }}
                 loading={refreshing}
               >
                 运行单元测试
               </Button>
               <Button
                 icon={<PlayCircleOutlined />}
-                onClick={() => triggerTest('integration')}
+                onClick={() => {
+                  console.log('集成测试按钮点击');
+                  triggerTest('integration');
+                }}
                 loading={refreshing}
               >
                 运行集成测试

@@ -338,8 +338,8 @@ class TestScheduler:
         while self.is_running:
             try:
                 now = datetime.now()
-                # 每天早上8点执行测试
-                target_time = now.replace(hour=8, minute=0, second=0, microsecond=0)
+                # 每天UTC 13:00执行测试（北京时间晚上9点）
+                target_time = now.replace(hour=13, minute=0, second=0, microsecond=0)
                 
                 # 如果已经过了今天的执行时间，则安排明天的
                 if now >= target_time:

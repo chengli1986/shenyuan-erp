@@ -28,10 +28,14 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import { testService } from '../../services/test';
 import { TestRun, TestResult, TestRunDetailResponse } from '../../types/test';
 
 dayjs.extend(duration);
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const { TabPane } = Tabs;
 const { Panel } = Collapse;
@@ -216,10 +220,10 @@ const TestResultDetail: React.FC<TestResultDetailProps> = ({
                 </Descriptions.Item>
                 <Descriptions.Item label="触发人">{data.run.trigger_user || '-'}</Descriptions.Item>
                 <Descriptions.Item label="开始时间">
-                  {dayjs(data.run.start_time).format('YYYY-MM-DD HH:mm:ss')}
+                  {dayjs.utc(data.run.start_time).local().format('YYYY-MM-DD HH:mm:ss')}
                 </Descriptions.Item>
                 <Descriptions.Item label="结束时间">
-                  {data.run.end_time ? dayjs(data.run.end_time).format('YYYY-MM-DD HH:mm:ss') : '-'}
+                  {data.run.end_time ? dayjs.utc(data.run.end_time).local().format('YYYY-MM-DD HH:mm:ss') : '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="持续时间">
                   {data.run.duration ? `${data.run.duration.toFixed(2)}秒` : '-'}
