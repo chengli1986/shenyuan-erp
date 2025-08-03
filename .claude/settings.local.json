@@ -43,7 +43,9 @@
       "Bash(source:*)",
       "Bash(sudo lsof:*)",
       "Bash(timedatectl:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(sudo apt:*)",
+      "Bash(sudo apt install:*)"
     ],
     "deny": []
   }

@@ -20,7 +20,8 @@ import {
   FileTextOutlined,
   UploadOutlined,
   UnorderedListOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons';
 
 import { ContractSummary } from '../../types/contract';
@@ -29,6 +30,7 @@ import { formatAmount } from '../../services/contract';
 import ContractFileUpload from '../../components/Contract/ContractFileUpload';
 import ContractItemList from '../../components/Contract/ContractItemList';
 import ContractVersionList from '../../components/Contract/ContractVersionList';
+import SystemCategoryList from '../../components/Contract/SystemCategoryList';
 
 const { Title } = Typography;
 const { TabPane } = Tabs;
@@ -73,7 +75,7 @@ const ContractManagement: React.FC<ContractManagementProps> = ({ projectId }) =>
   const handleUploadSuccess = () => {
     message.success('文件上传成功！');
     handleRefresh();
-    setActiveTab('items'); // 切换到设备清单页面
+    setActiveTab('categories'); // 切换到系统分类页面，让用户了解文件结构
   };
 
   useEffect(() => {
@@ -184,6 +186,22 @@ const ContractManagement: React.FC<ContractManagementProps> = ({ projectId }) =>
             <ContractFileUpload
               projectId={projectId}
               onUploadSuccess={handleUploadSuccess}
+            />
+          </TabPane>
+
+          <TabPane
+            tab={
+              <span>
+                <AppstoreOutlined />
+                系统分类
+              </span>
+            }
+            key="categories"
+          >
+            <SystemCategoryList
+              projectId={projectId}
+              currentVersion={summary?.current_version}
+              refreshKey={refreshKey}
             />
           </TabPane>
 

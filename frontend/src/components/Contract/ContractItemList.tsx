@@ -16,7 +16,9 @@ import {
   Alert,
   message,
   Tooltip,
-  Pagination
+  Pagination,
+  Row,
+  Col
 } from 'antd';
 import {
   SearchOutlined,
@@ -39,6 +41,7 @@ import {
 } from '../../services/contract';
 import ContractItemDetail from './ContractItemDetail';
 import ContractItemEdit from './ContractItemEdit';
+import AdvancedItemFilter, { FilterValues } from './AdvancedItemFilter';
 
 const { Search } = Input;
 const { Option } = Select;
@@ -65,10 +68,10 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
   });
   
   // 筛选条件
-  const [filters, setFilters] = useState({
-    category_id: undefined as number | undefined,
-    item_type: undefined as string | undefined,
-    search: ''
+  const [filters, setFilters] = useState<FilterValues>({
+    search: '',
+    sort_field: 'total_price',
+    sort_order: 'desc'
   });
   
   // 详情和编辑模态框状态
@@ -129,21 +132,22 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
     }
   }, [currentVersion, projectId, filters, refreshKey]);
 
-  // 处理搜索
-  const handleSearch = (value: string) => {
-    setFilters(prev => ({ ...prev, search: value }));
+  // 处理筛选条件变更
+  const handleFilterChange = (newFilters: FilterValues) => {
+    setFilters(newFilters);
+    setPagination(prev => ({ ...prev, current: 1 })); // 重置到第一页
     loadItems(1, pagination.pageSize);
   };
 
-  // 处理分类筛选
-  const handleCategoryFilter = (value: number | undefined) => {
-    setFilters(prev => ({ ...prev, category_id: value }));
-    loadItems(1, pagination.pageSize);
-  };
-
-  // 处理类型筛选
-  const handleTypeFilter = (value: string | undefined) => {
-    setFilters(prev => ({ ...prev, item_type: value }));
+  // 重置筛选条件
+  const handleFilterReset = () => {
+    const resetFilters: FilterValues = {
+      search: '',
+      sort_field: 'total_price',
+      sort_order: 'desc'
+    };
+    setFilters(resetFilters);
+    setPagination(prev => ({ ...prev, current: 1 }));
     loadItems(1, pagination.pageSize);
   };
 
@@ -350,50 +354,15 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
 
   return (
     <div>
-      {/* 筛选工具栏 */}
-      <Card style={{ marginBottom: 16 }}>
-        <Space wrap>
-          <Search
-            placeholder="搜索设备名称、型号、规格"
-            allowClear
-            style={{ width: 250 }}
-            onSearch={handleSearch}
-            enterButton={<SearchOutlined />}
-          />
-          
-          <Select
-            placeholder="选择系统分类"
-            style={{ width: 150 }}
-            allowClear
-            value={filters.category_id}
-            onChange={handleCategoryFilter}
-          >
-            {categories.map(category => (
-              <Option key={category.id} value={category.id}>
-                {category.category_name}
-              </Option>
-            ))}
-          </Select>
-
-          <Select
-            placeholder="物料类型"
-            style={{ width: 120 }}
-            allowClear
-            value={filters.item_type}
-            onChange={handleTypeFilter}
-          >
-            <Option value={ItemType.PRIMARY}>{ItemType.PRIMARY}</Option>
-            <Option value={ItemType.AUXILIARY}>{ItemType.AUXILIARY}</Option>
-          </Select>
-
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={handleRefresh}
-          >
-            刷新
-          </Button>
-        </Space>
-      </Card>
+      {/* 高级筛选工具栏 */}
+      <div style={{ marginBottom: 16 }}>
+        <AdvancedItemFilter
+          categories={categories}
+          onFilterChange={handleFilterChange}
+          onReset={handleFilterReset}
+          loading={loading}
+        />
+      </div>
 
       {/* 数据统计 */}
       <Card style={{ marginBottom: 16 }}>

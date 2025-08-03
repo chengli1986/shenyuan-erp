@@ -71,11 +71,67 @@
   **问题**：多个React组件存在ESLint警告
   **解决**：使用useCallback模式，修复useEffect依赖数组
 
+  ### 6. 版本管理功能问题 (2025-08-03)
+  **问题**：合同清单版本管理中查看/下载按钮无响应
+  **症状**：
+  - 查看按钮点击无反应
+  - 下载按钮无效果，浏览器提示"无法下载，没有文件"
+  
+  **根本原因**：
+  1. Modal.info组件调用失败导致查看功能异常（环境兼容性问题）
+  2. 缺少API代理配置导致跨域请求失败
+  3. API路径不匹配导致404错误（前端使用/versions/，后端实际为/contract-versions/）
+  4. 后端文件路径计算错误
+  5. 文件下载需使用fetch+blob而非直接链接下载
+  
+  **解决方案**：
+  1. **简化格式化函数**: 直接使用原生JavaScript方法替代复杂格式化
+  2. **前端代理配置**: 在package.json中添加proxy配置
+  3. **相对路径API调用**: 使用`/api/v1/...`替代绝对URL
+  4. **修复API路径匹配**: 统一前后端使用`/contract-versions/`路径
+  5. **后端路径修正**: 使用绝对路径计算文件位置
+  6. **Modal兼容性修复**: 使用受控Modal替代Modal.info
+  7. **下载方式优化**: 使用fetch+blob替代直接链接下载
+  
+  **技术细节**：
+  ```typescript
+  // 简化格式化
+  render: (value) => new Date(value).toLocaleString()
+  render: (value) => value ? `${(value / 1024).toFixed(1)} KB` : '-'
+  ```
+  ```json
+  // package.json代理配置
+  "proxy": "http://localhost:8000"
+  ```
+  ```typescript
+  // API路径统一修正
+  const downloadUrl = `/api/v1/contracts/projects/${projectId}/contract-versions/${version.id}/download`;
+  
+  // 受控Modal替代Modal.info
+  const [detailsVisible, setDetailsVisible] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState<ContractFileVersion | null>(null);
+  
+  // fetch+blob下载方式
+  const response = await fetch(downloadUrl);
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  ```
+  ```python
+  # 后端API路径统一
+  @router.get("/projects/{project_id}/contract-versions/{version_id}/download")
+  
+  # 后端文件路径修正
+  backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+  ```
+
   ## 核心调试技巧
   1. 使用curl测试API连接性
   2. 使用netstat检查端口占用
   3. 检查浏览器Network面板确认CORS问题
   4. 使用React useCallback防止不必要的重渲染
+  5. 前端功能异常优先检查代理配置和API路径
+  6. 文件下载问题首先验证后端文件路径计算
+  7. API 404错误时检查前后端路径是否匹配（/versions/ vs /contract-versions/）
 
   ## 代码规范
   - React组件使用useCallback包装函数避免useEffect依赖问题
@@ -118,3 +174,6 @@
   - 遇到问题先查看故障排除文档和学习指南
   - 新功能开发前先阅读网络访问原理理解前后端通信
   - 定期备份重要配置和数据库文件
+  - 开发新功能时重用已验证的组件，避免重复实现
+  - 优先实现用户实际需要的功能，避免过度设计
+  - 前端代理配置是开发环境的关键配置项，需要重启生效

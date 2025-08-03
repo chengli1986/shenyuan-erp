@@ -270,6 +270,70 @@ npm start
 "start": "REACT_APP_API_BASE_URL=http://localhost:8000 react-scripts start"
 ```
 
+#### 6. 版本管理功能问题
+
+**症状**：合同清单版本管理中查看/下载按钮无响应
+
+**问题定位**：
+1. **查看按钮无反应**：Modal.info组件调用失败导致查看功能异常
+2. **下载按钮无效果**：缺少API代理配置导致跨域请求失败
+3. **API路径不匹配**：前后端API路径不一致导致404错误
+
+**解决步骤**：
+
+1. **修复查看功能**：
+```typescript
+// 简化日期和文件大小格式化
+render: (value) => new Date(value).toLocaleString()
+render: (value) => value ? `${(value / 1024).toFixed(1)} KB` : '-'
+```
+
+2. **修复下载功能**：
+```json
+// frontend/package.json - 添加API代理
+{
+  "proxy": "http://localhost:8000"
+}
+```
+
+3. **修复API路径匹配**：
+```typescript
+// frontend - 统一使用contract-versions路径
+const downloadUrl = `/api/v1/contracts/projects/${projectId}/contract-versions/${version.id}/download`;
+```
+
+```python
+# backend/app/api/v1/contracts.py - 统一API路径
+@router.get("/projects/{project_id}/contract-versions/{version_id}/download")
+```
+
+4. **后端路径修复**：
+```python
+# backend/app/api/v1/contracts.py - 修正文件路径计算
+backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+file_path = os.path.join(backend_dir, "uploads", "contracts", version.stored_filename)
+```
+
+**验证步骤**：
+```bash
+# 1. 重启服务应用代理配置
+./scripts/stop-erp.sh
+./scripts/start-erp-dev.sh
+
+# 2. 测试API代理
+curl http://localhost:3000/api/v1/contracts/test
+
+# 3. 测试下载API（注意使用contract-versions路径）
+curl -I http://localhost:8000/api/v1/contracts/projects/2/contract-versions/3/download
+```
+
+**技术要点**：
+- 开发环境需要配置代理解决跨域问题
+- 前端使用相对路径`/api/v1/...`访问后端API
+- 后端文件路径必须使用绝对路径计算
+- 重启前端服务才能应用package.json的代理配置
+- Modal.info在某些环境下可能失效，建议使用受控Modal组件
+
 ## 开发最佳实践
 
 ### 调试技巧排序

@@ -3,7 +3,7 @@
  * 合同清单版本管理组件
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table,
   Card,
@@ -27,15 +27,12 @@ import type { ColumnsType } from 'antd/es/table';
 
 import {
   ContractFileVersion,
-  ContractFileInfo,
-  ContractFileListResponse
+  ContractFileInfo
 } from '../../types/contract';
 import {
   getContractVersions,
   getContractFiles,
-  deleteContractFile,
-  formatFileSize,
-  formatDateTime
+  deleteContractFile
 } from '../../services/contract';
 
 const { Text } = Typography;
@@ -57,7 +54,7 @@ const ContractVersionList: React.FC<ContractVersionListProps> = ({
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
 
   // 加载版本列表
-  const loadVersions = async () => {
+  const loadVersions = useCallback(async () => {
     try {
       setLoading(true);
       const [versionsData, filesData] = await Promise.all([
@@ -73,7 +70,7 @@ const ContractVersionList: React.FC<ContractVersionListProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
 
   // 删除版本
   const handleDelete = async (versionId: number) => {
@@ -85,57 +82,61 @@ const ContractVersionList: React.FC<ContractVersionListProps> = ({
       onRefresh?.();
     } catch (error) {
       console.error('删除失败:', error);
-      message.error('删除失败：' + (error as Error).message);
+      message.error('删除失败：' + (error instanceof Error ? error.message : '未知错误'));
     } finally {
       setDeleteLoading(null);
     }
   };
 
   // 查看版本详情
+  const [detailsVisible, setDetailsVisible] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState<ContractFileVersion | null>(null);
+
   const handleViewDetails = (version: ContractFileVersion) => {
-    Modal.info({
-      title: `版本详情 - v${version.version_number}`,
-      width: 600,
-      content: (
-        <div style={{ marginTop: 16 }}>
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <div>
-              <Text strong>文件名:</Text> {version.original_filename}
-            </div>
-            <div>
-              <Text strong>存储文件名:</Text> {version.stored_filename}
-            </div>
-            <div>
-              <Text strong>文件大小:</Text> {formatFileSize(version.file_size)}
-            </div>
-            <div>
-              <Text strong>上传人员:</Text> {version.upload_user_name}
-            </div>
-            <div>
-              <Text strong>上传时间:</Text> {formatDateTime(version.upload_time)}
-            </div>
-            <div>
-              <Text strong>上传原因:</Text> {version.upload_reason || '-'}
-            </div>
-            <div>
-              <Text strong>变更说明:</Text> {version.change_description || '-'}
-            </div>
-            <div>
-              <Text strong>是否优化版本:</Text> 
-              <Tag color={version.is_optimized ? 'green' : 'default'}>
-                {version.is_optimized ? '是' : '否'}
-              </Tag>
-            </div>
-            <div>
-              <Text strong>当前版本:</Text> 
-              <Tag color={version.is_current ? 'green' : 'default'}>
-                {version.is_current ? '是' : '否'}
-              </Tag>
-            </div>
-          </Space>
-        </div>
-      ),
-    });
+    console.log('查看版本详情:', version);
+    setSelectedVersion(version);
+    setDetailsVisible(true);
+  };
+
+  // 下载文件
+  const handleDownload = async (version: ContractFileVersion) => {
+    try {
+      console.log('开始下载文件:', version);
+      
+      // 构建下载URL - 使用相对路径避免跨域问题
+      const downloadUrl = `/api/v1/contracts/projects/${projectId}/contract-versions/${version.id}/download`;
+      
+      console.log('下载URL:', downloadUrl);
+      
+      // 使用fetch下载文件
+      const response = await fetch(downloadUrl);
+      
+      if (!response.ok) {
+        throw new Error(`下载失败: ${response.status} ${response.statusText}`);
+      }
+      
+      // 获取文件blob
+      const blob = await response.blob();
+      
+      // 创建下载链接
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = version.original_filename;
+      link.style.display = 'none';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // 释放URL对象
+      window.URL.revokeObjectURL(url);
+      
+      message.success('文件下载成功');
+    } catch (error) {
+      console.error('下载失败:', error);
+      message.error(`文件下载失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
   };
 
   // 表格列定义
@@ -177,7 +178,7 @@ const ContractVersionList: React.FC<ContractVersionListProps> = ({
       dataIndex: 'file_size',
       key: 'file_size',
       width: 100,
-      render: (value) => formatFileSize(value)
+      render: (value) => value ? `${(value / 1024).toFixed(1)} KB` : '-'
     },
     {
       title: '上传人员',
@@ -190,7 +191,7 @@ const ContractVersionList: React.FC<ContractVersionListProps> = ({
       dataIndex: 'upload_time',
       key: 'upload_time',
       width: 160,
-      render: (value) => formatDateTime(value)
+      render: (value) => new Date(value).toLocaleString()
     },
     {
       title: '上传原因',
@@ -239,6 +240,7 @@ const ContractVersionList: React.FC<ContractVersionListProps> = ({
               size="small"
               icon={<DownloadOutlined />}
               disabled={!fileList.find(f => f.version_id === record.id)?.file_exists}
+              onClick={() => handleDownload(record)}
             />
           </Tooltip>
 
@@ -270,32 +272,88 @@ const ContractVersionList: React.FC<ContractVersionListProps> = ({
   }, [projectId, refreshKey]);
 
   return (
-    <Card>
-      <div style={{ marginBottom: 16 }}>
-        <Space>
-          <Text strong>版本管理</Text>
-          <Text type="secondary">
-            管理项目的所有合同清单版本，支持查看、下载和删除操作
-          </Text>
-        </Space>
-      </div>
-
-      <Table
-        columns={columns}
-        dataSource={versions}
-        rowKey="id"
-        loading={loading}
-        pagination={false}
-        scroll={{ x: 1000 }}
-        size="small"
-      />
-
-      {versions.length === 0 && !loading && (
-        <div style={{ textAlign: 'center', padding: '50px 0' }}>
-          <Text type="secondary">暂无版本记录</Text>
+    <>
+      <Card>
+        <div style={{ marginBottom: 16 }}>
+          <Space>
+            <Text strong>版本管理</Text>
+            <Text type="secondary">
+              管理项目的所有合同清单版本，支持查看、下载和删除操作
+            </Text>
+          </Space>
         </div>
-      )}
-    </Card>
+
+        <Table
+          columns={columns}
+          dataSource={versions}
+          rowKey="id"
+          loading={loading}
+          pagination={false}
+          scroll={{ x: 1000 }}
+          size="small"
+        />
+
+        {versions.length === 0 && !loading && (
+          <div style={{ textAlign: 'center', padding: '50px 0' }}>
+            <Text type="secondary">暂无版本记录</Text>
+          </div>
+        )}
+      </Card>
+
+      {/* 版本详情Modal */}
+      <Modal
+        title={selectedVersion ? `版本详情 - v${selectedVersion.version_number}` : '版本详情'}
+        open={detailsVisible}
+        onCancel={() => setDetailsVisible(false)}
+        footer={null}
+        width={600}
+      >
+        {selectedVersion && (
+          <div style={{ marginTop: 16 }}>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <div>
+                <strong>文件名:</strong> {selectedVersion.original_filename}
+              </div>
+              <div>
+                <strong>存储文件名:</strong> {selectedVersion.stored_filename}
+              </div>
+              <div>
+                <strong>文件大小:</strong> {selectedVersion.file_size ? `${(selectedVersion.file_size / 1024).toFixed(1)} KB` : '未知'}
+              </div>
+              <div>
+                <strong>上传人员:</strong> {selectedVersion.upload_user_name}
+              </div>
+              <div>
+                <strong>上传时间:</strong> {new Date(selectedVersion.upload_time).toLocaleString()}
+              </div>
+              <div>
+                <strong>上传原因:</strong> {selectedVersion.upload_reason || '-'}
+              </div>
+              <div>
+                <strong>变更说明:</strong> {selectedVersion.change_description || '-'}
+              </div>
+              <div>
+                <strong>是否优化版本:</strong> 
+                <Tag color={selectedVersion.is_optimized ? 'green' : 'default'} style={{ marginLeft: 8 }}>
+                  {selectedVersion.is_optimized ? '是' : '否'}
+                </Tag>
+              </div>
+              <div>
+                <strong>当前版本:</strong> 
+                <Tag color={selectedVersion.is_current ? 'green' : 'default'} style={{ marginLeft: 8 }}>
+                  {selectedVersion.is_current ? '是' : '否'}
+                </Tag>
+              </div>
+              <div style={{ marginTop: 16, padding: 12, backgroundColor: '#f5f5f5', borderRadius: 4 }}>
+                <span style={{ fontSize: '12px', color: '#666' }}>
+                  注意：Excel文件无法在浏览器中直接预览，请点击下载按钮下载文件后使用Excel软件打开查看。
+                </span>
+              </div>
+            </Space>
+          </div>
+        )}
+      </Modal>
+    </>
   );
 };
 

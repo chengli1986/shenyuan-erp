@@ -10,10 +10,12 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import math
 import logging
+import os
 
 from app.core.database import get_db
 from app.models.project import Project
@@ -567,4 +569,52 @@ async def get_contract_summary(
         total_categories=total_categories,
         total_items=total_items,
         total_amount=total_amount
+    )
+
+
+# ============================
+# 文件下载 API
+# ============================
+
+@router.get("/projects/{project_id}/contract-versions/{version_id}/download")
+async def download_contract_file(
+    project_id: int = Path(..., description="项目ID"),
+    version_id: int = Path(..., description="版本ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    下载合同清单文件
+    """
+    
+    # 验证项目是否存在
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail=f"项目ID {project_id} 不存在")
+    
+    # 验证版本是否存在
+    version = db.query(ContractFileVersion).filter(
+        ContractFileVersion.id == version_id,
+        ContractFileVersion.project_id == project_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="指定的版本不存在")
+    
+    # 构建文件路径 - 使用绝对路径
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    file_path = os.path.join(backend_dir, "uploads", "contracts", version.stored_filename)
+    
+    print(f"查找文件路径: {file_path}")
+    print(f"文件是否存在: {os.path.exists(file_path)}")
+    print(f"存储文件名: {version.stored_filename}")
+    
+    # 检查文件是否存在
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="文件不存在")
+    
+    # 返回文件下载响应
+    return FileResponse(
+        path=file_path,
+        filename=version.original_filename,
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
