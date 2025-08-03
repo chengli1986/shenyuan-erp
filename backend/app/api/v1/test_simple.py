@@ -26,6 +26,33 @@ async def simple_trigger_test_run(
 ):
     """简化的测试触发 - 直接运行pytest"""
     
+    # 运行环境检查
+    backend_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    env_check_script = os.path.join(backend_path, "tools", "check_test_environment.py")
+    
+    try:
+        env_check_result = subprocess.run(
+            [sys.executable, env_check_script],
+            cwd=backend_path,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if env_check_result.returncode != 0:
+            return {
+                "message": "环境检查失败，请修复环境问题后重试",
+                "status": "failed",
+                "error": "environment_check_failed",
+                "details": env_check_result.stdout + env_check_result.stderr
+            }
+    except Exception as e:
+        return {
+            "message": f"环境检查异常: {str(e)}",
+            "status": "failed",
+            "error": "environment_check_error"
+        }
+    
     # 清理僵死测试
     timeout_threshold = datetime.now() - timedelta(minutes=1)
     stuck_tests = db.query(TestRun).filter(
@@ -61,8 +88,10 @@ async def simple_trigger_test_run(
     db.refresh(test_run)
     
     try:
-        # 确定测试路径
-        backend_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        # 确定测试路径 - 修复路径计算
+        # __file__ = /home/ubuntu/shenyuan-erp/backend/app/api/v1/test_simple.py
+        # 需要向上4级才能到backend目录
+        backend_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         
         if test_type == "unit":
             test_path = os.path.join(backend_path, "tests", "unit")
@@ -71,9 +100,13 @@ async def simple_trigger_test_run(
         else:  # all
             test_path = os.path.join(backend_path, "tests")
         
-        # 直接运行pytest
+        # 调试：记录路径信息
+        debug_info = f"Backend path: {backend_path}\nTest path: {test_path}\n"
+        
+        # 直接运行pytest - 确保在正确的虚拟环境中
+        venv_python = os.path.join(backend_path, "venv", "bin", "python")
         result = subprocess.run(
-            [sys.executable, "-m", "pytest", test_path, "-v"],
+            [venv_python, "-m", "pytest", test_path, "-v"],
             cwd=backend_path,
             capture_output=True,
             text=True,
@@ -113,7 +146,9 @@ async def simple_trigger_test_run(
             "failed_tests": failed,
             "success_rate": (passed / total * 100) if total > 0 else 0,
             "duration": test_run.duration,
-            "output": result.stdout[-500:] if result.stdout else ""  # 最后500字符
+            "return_code": result.returncode,
+            "output_preview": result.stdout[-500:] if result.stdout else "",  # 最后500字符
+            "debug_info": debug_info  # 临时添加调试信息
         }
         
     except subprocess.TimeoutExpired:

@@ -35,6 +35,26 @@ class TestScheduler:
     
     async def run_tests(self, test_type: str = "all", db_session: Session = None, existing_run_id: str = None) -> str:
         """运行测试并记录结果"""
+        # 运行环境检查
+        backend_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        env_check_script = os.path.join(backend_path, "tools", "check_test_environment.py")
+        
+        try:
+            env_check_result = subprocess.run(
+                [sys.executable, env_check_script],
+                cwd=backend_path,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if env_check_result.returncode != 0:
+                logger.error(f"环境检查失败: {env_check_result.stdout + env_check_result.stderr}")
+                raise Exception("Environment check failed")
+        except Exception as e:
+            logger.error(f"环境检查异常: {str(e)}")
+            raise Exception(f"Environment check error: {str(e)}")
+        
         # 使用外部会话或创建新会话
         db = db_session if db_session else self.get_db_session()
         should_close_db = db_session is None  # 只有自己创建的会话才需要关闭
@@ -102,7 +122,8 @@ class TestScheduler:
     
     async def _execute_tests(self, test_type: str, run_id: str, db: Session) -> dict:
         """执行具体的测试"""
-        backend_path = os.path.join(os.path.dirname(__file__), '..', '..')
+        # 修复路径：从app/core到backend目录需要向上2级
+        backend_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         
         results = {
             'total': 0,
@@ -131,14 +152,12 @@ class TestScheduler:
         logger.info("运行单元测试...")
         
         try:
-            # 运行pytest单元测试
+            # 运行pytest单元测试 - 使用与手动测试相同的方式
             cmd = [
                 sys.executable, '-m', 'pytest', 
                 'tests/unit', 
                 '-v', 
-                '--tb=short',
-                '--json-report',
-                '--json-report-file=test_results_unit.json'
+                '--tb=short'
             ]
             
             # 使用异步subprocess避免阻塞事件循环
@@ -151,19 +170,11 @@ class TestScheduler:
             
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
             
-            # 模拟subprocess.run的返回结果
-            class SubprocessResult:
-                def __init__(self, returncode, stdout, stderr):
-                    self.returncode = returncode
-                    self.stdout = stdout.decode('utf-8') if isinstance(stdout, bytes) else stdout
-                    self.stderr = stderr.decode('utf-8') if isinstance(stderr, bytes) else stderr
+            # 解析文本输出
+            output = stdout.decode('utf-8') if stdout else ''
             
-            result = SubprocessResult(process.returncode, stdout, stderr)
-            
-            # 解析结果
-            return await self._parse_pytest_results(
-                backend_path, 'test_results_unit.json', 'unit', run_id, db
-            )
+            # 使用与手动测试相同的解析逻辑
+            return self._parse_text_output(output, 'unit', run_id, db)
             
         except subprocess.TimeoutExpired:
             logger.error("单元测试执行超时")
@@ -177,14 +188,12 @@ class TestScheduler:
         logger.info("运行集成测试...")
         
         try:
-            # 运行pytest集成测试
+            # 运行pytest集成测试 - 使用与手动测试相同的方式
             cmd = [
                 sys.executable, '-m', 'pytest', 
                 'tests/integration', 
                 '-v', 
-                '--tb=short',
-                '--json-report',
-                '--json-report-file=test_results_integration.json'
+                '--tb=short'
             ]
             
             # 使用异步subprocess避免阻塞事件循环
@@ -197,19 +206,11 @@ class TestScheduler:
             
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
             
-            # 模拟subprocess.run的返回结果
-            class SubprocessResult:
-                def __init__(self, returncode, stdout, stderr):
-                    self.returncode = returncode
-                    self.stdout = stdout.decode('utf-8') if isinstance(stdout, bytes) else stdout
-                    self.stderr = stderr.decode('utf-8') if isinstance(stderr, bytes) else stderr
+            # 解析文本输出
+            output = stdout.decode('utf-8') if stdout else ''
             
-            result = SubprocessResult(process.returncode, stdout, stderr)
-            
-            # 解析结果
-            return await self._parse_pytest_results(
-                backend_path, 'test_results_integration.json', 'integration', run_id, db
-            )
+            # 使用与手动测试相同的解析逻辑
+            return self._parse_text_output(output, 'integration', run_id, db)
             
         except subprocess.TimeoutExpired:
             logger.error("集成测试执行超时")
@@ -294,6 +295,38 @@ class TestScheduler:
         except Exception as e:
             logger.error(f"解析测试结果失败: {str(e)}")
             results['error'] += 1
+        
+        return results
+    
+    def _parse_text_output(self, output: str, test_type: str, run_id: str, db: Session) -> dict:
+        """解析pytest文本输出 - 与手动测试使用相同的解析逻辑"""
+        results = {
+            'total': 0,
+            'passed': 0,
+            'failed': 0,
+            'skipped': 0,
+            'error': 0
+        }
+        
+        if not output:
+            return results
+        
+        # 简单解析输出行
+        output_lines = output.split('\n')
+        
+        for line in output_lines:
+            if " PASSED " in line:
+                results['passed'] += 1
+            elif " FAILED " in line:
+                results['failed'] += 1
+            elif " SKIPPED " in line:
+                results['skipped'] += 1
+            elif " ERROR " in line:
+                results['error'] += 1
+        
+        results['total'] = results['passed'] + results['failed'] + results['skipped'] + results['error']
+        
+        logger.info(f"解析{test_type}测试结果: 总计{results['total']}个, 通过{results['passed']}个, 失败{results['failed']}个")
         
         return results
     

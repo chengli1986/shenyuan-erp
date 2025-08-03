@@ -11,6 +11,7 @@ import uuid
 import asyncio
 import sys
 import os
+import subprocess
 
 from app.core.database import get_db
 from app.models.test_result import TestResult, TestRun
@@ -91,6 +92,33 @@ async def trigger_test_run(
     db: Session = Depends(get_db)
 ):
     """手动触发测试运行"""
+    # 运行环境检查
+    backend_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    env_check_script = os.path.join(backend_path, "tools", "check_test_environment.py")
+    
+    try:
+        env_check_result = subprocess.run(
+            [sys.executable, env_check_script],
+            cwd=backend_path,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if env_check_result.returncode != 0:
+            return {
+                "message": "环境检查失败，请修复环境问题后重试",
+                "status": "failed",
+                "error": "environment_check_failed",
+                "details": env_check_result.stdout + env_check_result.stderr
+            }
+    except Exception as e:
+        return {
+            "message": f"环境检查异常: {str(e)}",
+            "status": "failed",
+            "error": "environment_check_error"
+        }
+    
     # 检查并清理超时的测试（超过1分钟的running状态视为僵死）
     timeout_threshold = datetime.now() - timedelta(minutes=1)
     stuck_tests = db.query(TestRun).filter(
@@ -134,7 +162,9 @@ async def trigger_test_run(
     
     # 直接运行pytest（绕过TestScheduler避免挂死）
     try:
-        backend_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        # 修复路径计算：需要向上4级才能到backend目录
+        # __file__ = /home/ubuntu/shenyuan-erp/backend/app/api/v1/test_results.py
+        backend_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         
         # 处理测试路径
         if test_type == "all":
