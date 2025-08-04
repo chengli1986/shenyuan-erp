@@ -12,7 +12,6 @@ import {
   Button,
   Input,
   Select,
-  Tag,
   Statistic,
   Row,
   Col,
@@ -206,7 +205,7 @@ const ContractOverview: React.FC = () => {
       dataIndex: 'total_amount',
       key: 'total_amount',
       width: 150,
-      render: (amount) => amount && amount !== 0 ? `¥${amount.toLocaleString()}` : '-',
+      render: (amount) => amount && amount !== 0 ? `¥${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}` : '-',
     },
     {
       title: '上传时间',
@@ -214,7 +213,7 @@ const ContractOverview: React.FC = () => {
       width: 120,
       render: (_, record) => {
         if (record.contract_summary?.current_version) {
-          return new Date(record.contract_summary.upload_time).toLocaleDateString();
+          return new Date(record.contract_summary.current_version.upload_time).toLocaleDateString();
         }
         return '-';
       },
@@ -225,7 +224,7 @@ const ContractOverview: React.FC = () => {
       width: 100,
       render: (_, record) => {
         if (record.contract_summary?.current_version) {
-          return `v${record.contract_summary.current_version}`;
+          return `v${record.contract_summary.current_version.version_number}`;
         }
         return '-';
       },
