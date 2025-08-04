@@ -15,6 +15,7 @@ import zhCN from 'antd/locale/zh_CN';
 
 // 导入页面组件
 import ProjectList from './pages/Project/ProjectList';
+import ContractOverview from './pages/Contract/ContractOverview';
 import SystemTestDashboard from './pages/SystemTest/SystemTestDashboard';
 import ConnectionStatus from './components/ConnectionStatus';
 import { ConnectionProvider } from './contexts/ConnectionContext';
@@ -99,7 +100,7 @@ function AppContent() {
               style={{ borderRight: 0, paddingTop: '16px' }}
               items={menuItems}
               onClick={({ key }) => {
-                if (key === '/projects' || key === '/system-test') {
+                if (key === '/projects' || key === '/contracts' || key === '/system-test') {
                   // 已开发的功能，进行路由跳转
                   navigate(key);
                 } else {
@@ -143,6 +144,9 @@ function AppContent() {
                 
                 {/* 项目管理页面 */}
                 <Route path="/projects" element={<ProjectList />} />
+                
+                {/* 合同清单总览页面 */}
+                <Route path="/contracts" element={<ContractOverview />} />
                 
                 {/* 系统测试页面 */}
                 <Route path="/system-test" element={<SystemTestDashboard />} />
