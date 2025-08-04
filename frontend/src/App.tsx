@@ -16,6 +16,7 @@ import zhCN from 'antd/locale/zh_CN';
 // 导入页面组件
 import ProjectList from './pages/Project/ProjectList';
 import ContractOverview from './pages/Contract/ContractOverview';
+import ContractManagement from './pages/Contract/ContractManagement';
 import SystemTestDashboard from './pages/SystemTest/SystemTestDashboard';
 import ConnectionStatus from './components/ConnectionStatus';
 import { ConnectionProvider } from './contexts/ConnectionContext';
@@ -147,6 +148,9 @@ function AppContent() {
                 
                 {/* 合同清单总览页面 */}
                 <Route path="/contracts" element={<ContractOverview />} />
+                
+                {/* 项目合同管理页面 */}
+                <Route path="/contracts/:projectId" element={<ContractManagement />} />
                 
                 {/* 系统测试页面 */}
                 <Route path="/system-test" element={<SystemTestDashboard />} />

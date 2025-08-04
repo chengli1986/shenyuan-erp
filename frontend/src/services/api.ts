@@ -3,11 +3,9 @@
  */
 
 import axios from 'axios';
-import { API_URL } from '../config/api';
-
-// 创建axios实例，配置基础URL
+// 创建axios实例，使用相对路径通过代理（注意末尾斜杠）
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: '/api/v1/',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

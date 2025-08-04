@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   Table,
@@ -47,6 +48,7 @@ interface ProjectContractInfo extends Project {
 }
 
 const ContractOverview: React.FC = () => {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectContractInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -150,12 +152,11 @@ const ContractOverview: React.FC = () => {
 
   // 跳转到项目合同详情
   const handleViewContract = (project: ProjectContractInfo) => {
-    // 这里可以打开项目的合同管理页面
-    // 暂时显示消息，后续可以实现路由跳转或Modal
     if (project.contract_status === 'uploaded') {
-      message.info(`查看项目 "${project.project_name}" 的合同清单`);
+      // 跳转到项目合同管理页面
+      navigate(`/contracts/${project.id}`);
     } else {
-      message.warning(`项目 "${project.project_name}" 尚未上传合同清单`);
+      message.warning(`项目 "${project.project_name}" 尚未上传合同清单，请先上传合同清单文件。`);
     }
   };
 
@@ -205,7 +206,13 @@ const ContractOverview: React.FC = () => {
       dataIndex: 'total_amount',
       key: 'total_amount',
       width: 150,
-      render: (amount) => amount && amount !== 0 ? `¥${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}` : '-',
+      render: (amount) => {
+        if (!amount || amount === 0) return '-';
+        // 确保amount是数字类型
+        const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+        if (isNaN(numAmount)) return '-';
+        return `¥${numAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+      },
     },
     {
       title: '上传时间',
@@ -235,25 +242,33 @@ const ContractOverview: React.FC = () => {
       width: 200,
       render: (_, record) => (
         <Space>
-          <Tooltip title="查看合同详情">
+          {record.contract_status === 'uploaded' ? (
+            <Tooltip title="查看合同清单详情">
+              <Button
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => handleViewContract(record)}
+              >
+                查看清单
+              </Button>
+            </Tooltip>
+          ) : record.contract_status === 'loading' ? (
             <Button
               size="small"
-              icon={<EyeOutlined />}
-              onClick={() => handleViewContract(record)}
-              disabled={record.contract_status === 'loading'}
+              loading
+              disabled
             >
-              查看
+              加载中
             </Button>
-          </Tooltip>
-          {record.contract_status === 'not_uploaded' && (
-            <Tooltip title="上传合同清单">
+          ) : (
+            <Tooltip title="该项目尚未上传合同清单">
               <Button
                 size="small"
                 icon={<UploadOutlined />}
                 type="primary"
                 onClick={() => handleViewContract(record)}
               >
-                上传
+                上传清单
               </Button>
             </Tooltip>
           )}

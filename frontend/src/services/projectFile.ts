@@ -9,8 +9,7 @@ import {
   ProjectFileListResponse, 
   FileUploadResult,
   FileSystemConfig,
-  FileType,
-  BatchUploadItem
+  FileType
 } from '../types/projectFile';
 import { API_URL } from '../config/api';
 
@@ -231,7 +230,7 @@ export class ProjectFileService {
    * 获取文件系统配置
    */
   static async getFileSystemConfig(): Promise<FileSystemConfig> {
-    const response = await api.get<FileSystemConfig>('/projects/file-types');
+    const response = await api.get<FileSystemConfig>('projects/file-types/');
     return response.data;
   }
 

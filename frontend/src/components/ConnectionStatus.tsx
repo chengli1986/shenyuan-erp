@@ -14,7 +14,6 @@ import {
 } from '@ant-design/icons';
 import axios from 'axios';
 import { useConnection } from '../contexts/ConnectionContext';
-import { API_BASE_URL } from '../config/api';
 
 const { Text } = Typography;
 
@@ -34,8 +33,8 @@ const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
     try {
       setStatus('checking');
       
-      // 调用后端健康检查接口
-      const response = await axios.get(`${API_BASE_URL}/health`, {
+      // 调用后端健康检查接口 - 使用相对路径通过代理
+      const response = await axios.get('/health', {
         timeout: 3000, // 缩短到3秒超时，更快响应
       });
       

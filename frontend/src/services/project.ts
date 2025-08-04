@@ -27,7 +27,7 @@ export class ProjectService {
     if (search) params.search = search;
     if (status) params.status = status;
     
-    const response = await api.get<ProjectListResponse>('/projects', { params });
+    const response = await api.get<ProjectListResponse>('projects/', { params });
     return response.data;
   }
 
@@ -36,7 +36,7 @@ export class ProjectService {
    * @param id 项目ID
    */
   static async getProject(id: number): Promise<Project> {
-    const response = await api.get<Project>(`/projects/${id}`);
+    const response = await api.get<Project>(`projects/${id}/`);
     return response.data;
   }
 
@@ -45,7 +45,7 @@ export class ProjectService {
    * @param projectData 项目数据
    */
   static async createProject(projectData: ProjectCreate): Promise<Project> {
-    const response = await api.post<Project>('/projects', projectData);
+    const response = await api.post<Project>('projects/', projectData);
     return response.data;
   }
 
@@ -55,7 +55,7 @@ export class ProjectService {
    * @param projectData 更新数据
    */
   static async updateProject(id: number, projectData: ProjectUpdate): Promise<Project> {
-    const response = await api.put<Project>(`/projects/${id}`, projectData);
+    const response = await api.put<Project>(`projects/${id}/`, projectData);
     return response.data;
   }
 
@@ -64,7 +64,7 @@ export class ProjectService {
    * @param id 项目ID
    */
   static async deleteProject(id: number): Promise<void> {
-    await api.delete(`/projects/${id}`);
+    await api.delete(`projects/${id}/`);
   }
 }
 

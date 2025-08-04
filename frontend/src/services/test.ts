@@ -4,7 +4,6 @@
 
 import api from './api';
 import { 
-  TestRun, 
   TestRunListResponse, 
   TestRunDetailResponse,
   TestStatistics,
@@ -22,7 +21,7 @@ export const testService = {
     status?: string;
     days?: number;
   }): Promise<TestRunListResponse> => {
-    const response = await api.get('/tests/runs', { params });
+    const response = await api.get('tests/runs/', { params });
     return response.data;
   },
 
@@ -30,7 +29,7 @@ export const testService = {
    * 获取测试运行详情
    */
   getTestRunDetail: async (runId: string): Promise<TestRunDetailResponse> => {
-    const response = await api.get(`/tests/runs/${runId}`);
+    const response = await api.get(`tests/runs/${runId}/`);
     return response.data;
   },
 
@@ -53,7 +52,7 @@ export const testService = {
    * 获取测试统计信息
    */
   getTestStatistics: async (days: number = 30): Promise<TestStatistics> => {
-    const response = await api.get('/tests/statistics', {
+    const response = await api.get('tests/statistics/', {
       params: { days }
     });
     return response.data;
@@ -63,7 +62,7 @@ export const testService = {
    * 获取最新测试状态
    */
   getLatestTestStatus: async (): Promise<LatestTestStatus> => {
-    const response = await api.get('/tests/latest');
+    const response = await api.get('tests/latest/');
     return response.data;
   }
 };

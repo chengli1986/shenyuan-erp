@@ -18,10 +18,8 @@ import {
   ContractFileListResponse,
   FileUploadFormData
 } from '../types/contract';
-import { API_URL } from '../config/api';
-
-// API基础URL
-const API_BASE = API_URL;
+// 使用相对路径通过代理访问API
+const API_BASE = '/api/v1';
 
 // 通用请求处理函数
 async function handleResponse<T>(response: Response): Promise<T> {
