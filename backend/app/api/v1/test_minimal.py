@@ -51,7 +51,7 @@ async def minimal_trigger_test_run(
         run_type="manual",
         start_time=datetime.now(),
         status="running",
-        trigger_user=current_user.get("username", "unknown")
+        trigger_user=getattr(current_user, "username", "unknown")
     )
     
     db.add(test_run)
@@ -60,7 +60,9 @@ async def minimal_trigger_test_run(
     
     try:
         # 直接运行pytest（最简单的方式）
-        backend_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        # 修正路径: __file__ 是 /home/ubuntu/shenyuan-erp/backend/app/api/v1/test_minimal.py
+        # 需要获取到 /home/ubuntu/shenyuan-erp/backend
+        backend_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         
         # 处理测试路径
         if test_type == "all":

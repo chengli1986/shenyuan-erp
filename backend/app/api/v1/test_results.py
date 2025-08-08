@@ -148,7 +148,7 @@ async def trigger_test_run(
         run_type="manual",
         start_time=datetime.now(),
         status="running",
-        trigger_user=current_user.get("username", "unknown"),
+        trigger_user=getattr(current_user, "username", "unknown"),
         environment={
             "test_type": test_type,
             "python_version": "3.8",

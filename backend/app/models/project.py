@@ -6,6 +6,7 @@
 """
 
 from sqlalchemy import Column, Integer, String, DateTime, Text, Numeric, Enum
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 import enum
@@ -56,6 +57,9 @@ class Project(Base):
     # 系统自动字段 - 记录创建和更新时间
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
+    
+    # 关系定义
+    purchase_requests = relationship("PurchaseRequest", back_populates="project")
     
     def __repr__(self):
         """

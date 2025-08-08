@@ -9,7 +9,7 @@
   - [x] 合同清单管理模块  
   - [x] 合同清单总览页面
   - [x] 系统测试管理模块
-  - [ ] 采购请购模块开发
+  - [x] 采购请购模块开发 (v1.0 简化版)
 
   ## 重要决策
   - 按照v62版本开发文档进行开发
@@ -138,6 +138,256 @@
   - TypeScript类型安全处理
   - Badge组件状态展示
   - 响应式表格设计
+
+  ## 采购请购模块开发记录 (2025-08-08)
+
+  ### 开发背景和原则
+  **用户需求**：开发采购请购模块，但要求采用"小步快跑、局部功能验证"的模式
+  **开发原则**：
+  - 从简单的局部功能开始
+  - 每开发一个功能都验证测试
+  - 适合编程初学者的学习节奏
+  - 避免过度复杂的设计
+
+  ### 技术架构设计
+  **后端架构**：
+  ```
+  backend/app/models/purchase.py      # 数据模型定义
+  backend/app/schemas/purchase.py     # API数据验证
+  backend/app/api/v1/purchases.py     # RESTful API接口
+  ```
+
+  **前端架构**：
+  ```
+  frontend/src/types/purchase.ts      # TypeScript类型定义
+  frontend/src/services/purchase.ts   # API调用封装
+  frontend/src/pages/Purchase/        # UI组件
+    ├── SimplePurchaseList.tsx       # 申购单列表页面
+    ├── SimplePurchaseForm.tsx       # 申购单创建表单
+    └── SimplePurchaseDetail.tsx     # 申购单详情弹窗
+  ```
+
+  ### 核心功能实现
+
+  #### 1. 简化版数据模型
+  **设计思路**：避免复杂的审批流程，专注核心CRUD功能
+  ```python
+  class SimplePurchaseRequest(Base):
+      __tablename__ = "simple_purchase_requests"
+      
+      id = Column(Integer, primary_key=True, index=True)
+      request_code = Column(String(50), unique=True, index=True, nullable=False)
+      project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+      requester_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+      equipment_name = Column(String(200), nullable=False)
+      brand_model = Column(String(200))
+      quantity = Column(Integer, nullable=False)
+      estimated_price = Column(Numeric(12, 2))
+      urgency_level = Column(String(20), default="normal")
+      reason = Column(Text)
+      status = Column(String(20), default="pending")
+      created_at = Column(DateTime, server_default=func.now())
+  ```
+
+  #### 2. API接口设计
+  **RESTful设计**：遵循REST最佳实践
+  ```python
+  # 获取申购单列表（支持分页和筛选）
+  @router.get("/", response_model=PaginatedSimplePurchaseResponse)
+
+  # 创建新申购单
+  @router.post("/", response_model=SimplePurchaseResponse)
+
+  # 获取申购单详情
+  @router.get("/{request_id}", response_model=SimplePurchaseResponse)
+
+  # 更新申购单状态
+  @router.put("/{request_id}", response_model=SimplePurchaseResponse)
+  ```
+
+  #### 3. 前端组件设计
+  **组件职责清晰**：
+  - **SimplePurchaseList**: 负责数据展示和分页
+  - **SimplePurchaseForm**: 负责数据录入和验证
+  - **SimplePurchaseDetail**: 负责详情展示和操作
+
+  ### 开发过程中的问题解决
+
+  #### 问题1：前端编译错误 (TypeScript类型问题)
+  **错误现象**：
+  ```typescript
+  // 错误1：ContractItem类型字段不存在
+  Property 'brand' does not exist on type 'ContractItem'
+
+  // 错误2：Select组件filterOption类型不匹配
+  Type '(input: string, option: any) => boolean' is not assignable
+
+  // 错误3：disabled属性类型错误
+  Type 'number' is not assignable to type 'boolean | undefined'
+
+  // 错误4：接口继承类型冲突
+  Types of property 'total_amount' are incompatible
+  ```
+
+  **解决方案**：
+  ```typescript
+  // 1. 修正字段名称（brand → brand_model）
+  brand_model: contractItem.brand_model,
+
+  // 2. 修复Select组件类型转换
+  filterOption={(input, option) => 
+    (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+  }
+
+  // 3. 修复布尔类型转换
+  disabled={!!selectedProject?.id}
+
+  // 4. 使用Omit工具类型解决继承冲突
+  export interface PurchaseRequestWithoutPrice extends Omit<PurchaseRequest, 'total_amount'> {
+    total_amount?: null;
+  }
+  ```
+
+  #### 问题2：申购单创建后无法查看
+  **症状**：可以成功创建申购单，但列表页面不显示新数据
+  **原因分析**：缺少数据刷新机制
+  **解决方案**：
+  ```typescript
+  // 1. 创建成功后URL参数刷新
+  navigate(`/purchases?refresh=${Date.now()}`);
+
+  // 2. 监听URL参数变化
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    if (urlParams.get('refresh')) {
+      loadPurchaseRequests();
+    }
+  }, [location.search, loadPurchaseRequests]);
+
+  // 3. 页面焦点事件刷新
+  useEffect(() => {
+    const handleFocus = () => {
+      loadPurchaseRequests();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [loadPurchaseRequests]);
+  ```
+
+  #### 问题3：查看按钮无响应
+  **症状**：点击列表中的查看按钮没有任何反应
+  **解决方案**：创建SimplePurchaseDetail组件
+  ```typescript
+  // 详情弹窗组件
+  const SimplePurchaseDetail: React.FC<{
+    visible: boolean;
+    purchaseId: number;
+    onClose: () => void;
+  }> = ({ visible, purchaseId, onClose }) => {
+    // 组件实现...
+  };
+
+  // 列表中绑定点击事件
+  const viewDetail = (record: SimplePurchaseRequest) => {
+    setSelectedPurchase(record);
+    setDetailModalVisible(true);
+  };
+  ```
+
+  #### 问题4：显示项目ID而非项目名称
+  **症状**：列表显示"项目ID: 2"，用户希望看到实际项目名称
+  **解决方案**：后端API返回关联数据
+  ```python
+  # backend/app/api/v1/purchases.py
+  def get_purchase_requests(db: Session):
+      # 获取项目名称
+      project = db.query(Project).filter(Project.id == item.project_id).first()
+      project_name = project.project_name if project else None
+      
+      # 获取申请人姓名
+      requester = db.query(User).filter(User.id == item.requester_id).first()
+      requester_name = requester.username if requester else None
+      
+      return {
+          "project_name": project_name,
+          "requester_name": requester_name,
+          # 其他字段...
+      }
+  ```
+
+  ### 系统测试页面修复 (2025-08-08)
+
+  #### 问题描述
+  **症状**：从网页端登录系统测试页面，不显示任何测试结果
+  **验证过程**：
+  ```bash
+  # 1. 后端API正常返回数据
+  curl http://localhost:8000/api/v1/tests/runs | jq '.total'
+  # 输出: 27
+
+  # 2. 前端代理也能正常访问
+  curl http://localhost:3000/api/v1/tests/runs | jq '.total'
+  # 输出: 27
+
+  # 3. 前端页面却不显示数据
+  ```
+
+  #### 根本原因分析
+  **技术细节**：FastAPI路由末尾斜杠处理机制
+  ```python
+  # FastAPI路由定义（无末尾斜杠）
+  @router.get("/runs")  # 正确
+  @router.get("/runs/") # 会自动重定向
+  ```
+
+  ```typescript
+  // 前端API调用（有末尾斜杠）
+  api.get('tests/runs/')  # 导致307重定向，数据丢失
+  ```
+
+  #### 解决方案
+  **修复策略**：统一前后端API路径格式
+  ```typescript
+  // frontend/src/services/test.ts
+  // 修复前：
+  const response = await api.get('tests/runs/', { params });
+  const response = await api.get(`tests/runs/${runId}/`);
+  const response = await api.get('tests/statistics/');
+  const response = await api.get('tests/latest/');
+
+  // 修复后：
+  const response = await api.get('tests/runs', { params });
+  const response = await api.get(`tests/runs/${runId}`);
+  const response = await api.get('tests/statistics');
+  const response = await api.get('tests/latest');
+  ```
+
+  **验证结果**：
+  - 移除所有API路径末尾斜杠
+  - 前后端路径完全匹配
+  - 系统测试页面正常显示27条历史测试记录
+
+  ### 技术总结和学习要点
+
+  #### 开发流程总结
+  1. **需求明确**：用户要求小步快跑的开发模式
+  2. **架构简化**：避免复杂设计，专注核心功能
+  3. **迭代验证**：每个功能完成后立即测试
+  4. **问题修复**：及时解决编译和运行时问题
+  5. **用户反馈**：根据用户体验优化界面显示
+
+  #### 核心技术要点
+  1. **TypeScript类型安全**：使用Omit、联合类型等工具类型
+  2. **React Hooks最佳实践**：useCallback、useEffect依赖管理
+  3. **API设计规范**：RESTful风格、统一路径格式
+  4. **前后端协作**：代理配置、CORS处理
+  5. **用户体验优化**：实时刷新、友好显示、响应式设计
+
+  #### 调试技巧积累
+  1. **API路径问题**：使用curl验证后端，检查前端路径格式
+  2. **类型错误**：善用TypeScript工具类型解决继承冲突
+  3. **数据刷新**：多种机制并存（URL参数、事件监听、手动刷新）
+  4. **用户友好性**：显示有意义的信息而非技术ID
 
   ## 核心调试技巧
   1. 使用curl测试API连接性

@@ -80,7 +80,7 @@ async def simple_trigger_test_run(
         run_type="manual",
         start_time=datetime.now(),
         status="running",
-        trigger_user=current_user.get("username", "unknown")
+        trigger_user=getattr(current_user, "username", "unknown")
     )
     
     db.add(test_run)

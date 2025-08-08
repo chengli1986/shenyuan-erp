@@ -17,6 +17,8 @@ import zhCN from 'antd/locale/zh_CN';
 import ProjectList from './pages/Project/ProjectList';
 import ContractOverview from './pages/Contract/ContractOverview';
 import ContractManagement from './pages/Contract/ContractManagement';
+import SimplePurchaseList from './pages/Purchase/SimplePurchaseList';
+import SimplePurchaseForm from './pages/Purchase/SimplePurchaseForm';
 import SystemTestDashboard from './pages/SystemTest/SystemTestDashboard';
 import ConnectionStatus from './components/ConnectionStatus';
 import { ConnectionProvider } from './contexts/ConnectionContext';
@@ -101,7 +103,7 @@ function AppContent() {
               style={{ borderRight: 0, paddingTop: '16px' }}
               items={menuItems}
               onClick={({ key }) => {
-                if (key === '/projects' || key === '/contracts' || key === '/system-test') {
+                if (key === '/projects' || key === '/contracts' || key === '/purchases' || key === '/system-test') {
                   // 已开发的功能，进行路由跳转
                   navigate(key);
                 } else {
@@ -151,6 +153,10 @@ function AppContent() {
                 
                 {/* 项目合同管理页面 */}
                 <Route path="/contracts/:projectId" element={<ContractManagement />} />
+                
+                {/* 采购管理页面 - 简化版本 */}
+                <Route path="/purchases" element={<SimplePurchaseList />} />
+                <Route path="/purchases/create" element={<SimplePurchaseForm />} />
                 
                 {/* 系统测试页面 */}
                 <Route path="/system-test" element={<SystemTestDashboard />} />

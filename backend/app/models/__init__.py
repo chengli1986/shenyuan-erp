@@ -13,11 +13,33 @@ from .contract import (
     ContractItem         # 合同清单明细项
 )
 
+# 导入用户相关模型
+from .user import User  # 用户信息模型
+
+# 导入采购请购相关模型
+from .purchase import (
+    PurchaseRequest,      # 申购单主表
+    PurchaseRequestItem,  # 申购明细项
+    PurchaseApproval,     # 审批记录
+    Supplier,             # 供应商信息
+    InboundBatch,         # 入库批次
+    AuxiliaryTemplate,    # 辅材模板
+    AuxiliaryTemplateItem # 辅材模板明细
+)
+
 # 导出所有模型，方便其他模块导入
 __all__ = [
     "Project",
     "ProjectFile", 
     "ContractFileVersion",
     "SystemCategory",
-    "ContractItem"
+    "ContractItem",
+    "User",
+    "PurchaseRequest",
+    "PurchaseRequestItem",
+    "PurchaseApproval",
+    "Supplier",
+    "InboundBatch",
+    "AuxiliaryTemplate",
+    "AuxiliaryTemplateItem"
 ]

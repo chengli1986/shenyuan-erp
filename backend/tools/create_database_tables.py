@@ -4,10 +4,12 @@
 
 import os
 import sys
-sys.path.append(os.path.dirname(__file__))
+# 添加backend目录到Python路径
+backend_dir = os.path.dirname(os.path.dirname(__file__))
+sys.path.insert(0, backend_dir)
 
 from app.core.database import engine, Base
-from app.models import project, project_file, contract
+from app.models import project, project_file, contract, user, purchase
 
 def create_database_tables():
     """创建数据库表"""
@@ -21,6 +23,8 @@ def create_database_tables():
         print(f"  - 项目模型: {project}")
         print(f"  - 项目文件模型: {project_file}")
         print(f"  - 合同模型: {contract}")
+        print(f"  - 用户模型: {user}")
+        print(f"  - 采购模型: {purchase}")
         
         print("\n正在创建数据库表...")
         Base.metadata.create_all(bind=engine)

@@ -32,7 +32,44 @@
 - ✅ **项目基础管理** - 项目创建、编辑、状态管理
 - ✅ **合同清单管理** - Excel导入、清单解析、设备管理
 - ✅ **系统测试管理** - 自动化测试、结果监控、统计分析
+- ✅ **采购请购模块** - 简化版采购申请单管理 (v1.0)
 - 🚧 **系统分类管理** - 设备分类体系优化
+
+### 采购请购模块 (v1.0)
+
+**开发原则**：采用"小步快跑、局部功能验证"的迭代开发模式
+
+**核心功能**：
+- ✅ 简化版申购单创建 - 基础信息录入和提交
+- ✅ 申购单列表查看 - 分页显示和状态查询
+- ✅ 申购单详情查看 - 弹窗展示完整信息
+- ✅ 项目名称显示 - 替代项目ID展示，提升用户体验
+
+**技术特点**：
+- **简化版数据模型**：避免复杂的审批流程，专注核心功能
+- **类型安全设计**：完整的TypeScript类型定义
+- **响应式UI**：基于Ant Design的现代化界面
+- **实时刷新机制**：创建后自动刷新列表数据
+
+**文件结构**：
+```
+backend/app/models/purchase.py      # 采购数据模型
+backend/app/schemas/purchase.py     # API数据校验
+backend/app/api/v1/purchases.py     # RESTful API接口
+
+frontend/src/types/purchase.ts      # TypeScript类型定义
+frontend/src/services/purchase.ts   # API调用服务
+frontend/src/pages/Purchase/        # 前端页面组件
+  ├── SimplePurchaseList.tsx       # 申购单列表
+  ├── SimplePurchaseForm.tsx       # 申购单表单
+  └── SimplePurchaseDetail.tsx     # 申购单详情
+```
+
+**设计决策**：
+- 采用简化的单表设计，避免复杂的关联关系
+- 使用弹窗模式展示详情，减少页面跳转
+- 实现项目名称解析，提升数据可读性
+- 预留扩展接口，支持未来功能迭代
 
 ## 快速开始
 
@@ -353,6 +390,111 @@ curl -I http://localhost:8000/api/v1/contracts/projects/2/contract-versions/3/do
 - 重启前端服务才能应用package.json的代理配置
 - Modal.info在某些环境下可能失效，建议使用受控Modal组件
 
+#### 7. 采购模块前端编译错误 (2025-08-08)
+
+**症状**：采购模块前端编译时出现多个TypeScript错误
+
+**错误类型**：
+```typescript
+// 1. ContractItem类型错误
+Property 'brand' does not exist on type 'ContractItem'
+
+// 2. Select组件filterOption类型错误  
+Type '(input: string, option: any) => boolean' is not assignable
+
+// 3. disabled属性类型错误
+Type 'number' is not assignable to type 'boolean | undefined'
+
+// 4. 继承接口错误
+Types of property 'total_amount' are incompatible
+```
+
+**解决方案**：
+```typescript
+// 1. 修复字段名称错误
+// 错误：item.brand
+// 正确：item.brand_model
+
+// 2. 修复Select组件类型
+filterOption={(input, option) => 
+  (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+}
+
+// 3. 修复disabled属性类型
+disabled={!!selectedProject?.id}
+
+// 4. 修复接口继承
+export interface PurchaseRequestWithoutPrice extends Omit<PurchaseRequest, 'total_amount'> {
+  total_amount?: null;
+}
+```
+
+#### 8. 申购单功能问题修复 (2025-08-08)
+
+**问题1**：申购单创建后无法查看
+- **症状**：可以创建申购单，但列表无法显示新创建的数据
+- **解决**：添加多种数据刷新机制（URL参数、页面焦点事件）
+
+**问题2**：查看按钮无响应
+- **症状**：点击查看按钮没有任何反应
+- **解决**：创建SimplePurchaseDetail组件，实现详情弹窗显示
+
+**问题3**：项目ID显示代替项目名称
+- **症状**：列表显示"项目ID: 2"而非实际项目名称
+- **解决**：后端API返回项目名称，前端优先显示名称
+
+```python
+# backend/app/api/v1/purchases.py
+# 添加项目名称查询
+project = db.query(Project).filter(Project.id == item.project_id).first()
+project_name = project.project_name if project else None
+
+# API响应包含项目名称
+return {
+    "project_name": project_name,
+    "requester_name": requester.username if requester else None,
+    # 其他字段...
+}
+```
+
+#### 9. 系统测试页面显示问题 (2025-08-08)
+
+**症状**：系统测试页面不显示任何测试结果，但后端API正常返回数据
+
+**问题定位**：
+```bash
+# 后端API正常返回27条记录
+curl http://localhost:8000/api/v1/tests/runs | jq '.total'
+# 输出: 27
+
+# 前端通过代理访问也正常
+curl http://localhost:3000/api/v1/tests/runs | jq '.total'  
+# 输出: 27
+```
+
+**根本原因**：前端API路径末尾包含斜杠，而FastAPI路由不接受末尾斜杠
+
+**解决方案**：
+```typescript
+// frontend/src/services/test.ts
+// 修复前：
+const response = await api.get('tests/runs/', { params });
+const response = await api.get(`tests/runs/${runId}/`);
+const response = await api.get('tests/statistics/');
+const response = await api.get('tests/latest/');
+
+// 修复后：
+const response = await api.get('tests/runs', { params });
+const response = await api.get(`tests/runs/${runId}`);
+const response = await api.get('tests/statistics');
+const response = await api.get('tests/latest');
+```
+
+**验证结果**：
+- 移除所有API路径末尾斜杠
+- 前后端路径完全匹配
+- 系统测试页面正常显示27条历史记录
+
 ## 开发最佳实践
 
 ### 调试技巧排序
@@ -440,5 +582,5 @@ curl -I http://localhost:8000/api/v1/contracts/projects/2/contract-versions/3/do
 
 ## 文档信息
 
-**最后更新**：2025-08-02  
-**版本**：1.0.0
+**最后更新**：2025-08-08  
+**版本**：1.1.0 - 新增采购请购模块(v1.0)和重要问题修复记录
