@@ -198,8 +198,8 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
     },
     {
       title: '设备型号',
-      dataIndex: 'brand_model',
-      key: 'brand_model',
+      dataIndex: 'specification',
+      key: 'specification',
       width: 150,
       ellipsis: {
         showTitle: false
@@ -212,8 +212,8 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
     },
     {
       title: '设备品牌',
-      dataIndex: 'specification',
-      key: 'specification',
+      dataIndex: 'brand_model',
+      key: 'brand_model',
       width: 150,
       ellipsis: {
         showTitle: false

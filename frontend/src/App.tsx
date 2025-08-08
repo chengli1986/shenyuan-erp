@@ -18,7 +18,7 @@ import ProjectList from './pages/Project/ProjectList';
 import ContractOverview from './pages/Contract/ContractOverview';
 import ContractManagement from './pages/Contract/ContractManagement';
 import SimplePurchaseList from './pages/Purchase/SimplePurchaseList';
-import SimplePurchaseForm from './pages/Purchase/SimplePurchaseForm';
+import EnhancedPurchaseForm from './pages/Purchase/EnhancedPurchaseForm';
 import SystemTestDashboard from './pages/SystemTest/SystemTestDashboard';
 import ConnectionStatus from './components/ConnectionStatus';
 import { ConnectionProvider } from './contexts/ConnectionContext';
@@ -156,7 +156,7 @@ function AppContent() {
                 
                 {/* 采购管理页面 - 简化版本 */}
                 <Route path="/purchases" element={<SimplePurchaseList />} />
-                <Route path="/purchases/create" element={<SimplePurchaseForm />} />
+                <Route path="/purchases/create" element={<EnhancedPurchaseForm />} />
                 
                 {/* 系统测试页面 */}
                 <Route path="/system-test" element={<SystemTestDashboard />} />

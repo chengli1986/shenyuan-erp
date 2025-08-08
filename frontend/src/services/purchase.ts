@@ -33,6 +33,88 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 // ============================
+// 合同清单物料查询 API
+// ============================
+
+/**
+ * 根据项目获取合同清单物料
+ */
+export async function getContractItemsByProject(
+  projectId: number,
+  itemType?: string,
+  search?: string
+): Promise<{
+  items: any[];
+  project_id: number;
+  version_id: number;
+  total: number;
+}> {
+  const queryString = new URLSearchParams();
+  if (itemType) queryString.append('item_type', itemType);
+  if (search) queryString.append('search', search);
+
+  const url = `${API_BASE}/purchases/contract-items/by-project/${projectId}${queryString.toString() ? `?${queryString}` : ''}`;
+  const response = await fetch(url);
+  return handleResponse(response);
+}
+
+/**
+ * 获取合同清单物料详细信息
+ */
+export async function getContractItemDetails(
+  itemId: number
+): Promise<{
+  item: any;
+  purchased_quantity: number;
+  remaining_quantity: number;
+  can_purchase: boolean;
+}> {
+  const response = await fetch(`${API_BASE}/purchases/contract-items/${itemId}/details`);
+  return handleResponse(response);
+}
+
+/**
+ * 获取项目的物料名称列表（用于下拉选择）
+ */
+export async function getMaterialNamesByProject(
+  projectId: number,
+  itemType: string = '主材'
+): Promise<{
+  material_names: string[];
+  item_type: string;
+  project_id: number;
+}> {
+  const response = await fetch(`${API_BASE}/purchases/material-names/by-project/${projectId}?item_type=${itemType}`);
+  return handleResponse(response);
+}
+
+/**
+ * 根据物料名称获取可选的规格型号（用于联动选择）
+ */
+export async function getSpecificationsByMaterial(
+  projectId: number,
+  itemName: string
+): Promise<{
+  specifications: {
+    contract_item_id: number;
+    specification: string;
+    brand_model: string;
+    unit: string;
+    total_quantity: number;
+    purchased_quantity: number;
+    remaining_quantity: number;
+    unit_price?: number;
+  }[];
+  item_name: string;
+  project_id: number;
+}> {
+  const response = await fetch(
+    `${API_BASE}/purchases/specifications/by-material?project_id=${projectId}&item_name=${encodeURIComponent(itemName)}`
+  );
+  return handleResponse(response);
+}
+
+// ============================
 // 申购单管理 API
 // ============================
 
