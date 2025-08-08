@@ -495,6 +495,88 @@ const response = await api.get('tests/latest');
 - 前后端路径完全匹配
 - 系统测试页面正常显示27条历史记录
 
+#### 10. 申购模块智能化优化 (2025-08-08)
+
+**需求背景**：用户要求申购模块与合同清单深度集成，确保主材严格来源于合同清单
+
+**优化内容**：
+1. **物料名称智能选择**：主材只能从合同清单下拉选择，辅材可自由输入
+2. **规格型号联动显示**：选择物料后自动显示可选规格选项
+3. **品牌单位自动填充**：选择规格后品牌、单位自动填充且不可修改
+4. **数量限制验证**：申购数量不能超过合同清单剩余可申购数量
+5. **分批采购支持**：支持同一物料多次申购，动态计算剩余数量
+
+**技术实现**：
+```typescript
+// 物料名称联动查询API
+export async function getMaterialNamesByProject(projectId: number, itemType: string)
+
+// 规格选择联动API  
+export async function getSpecificationsByMaterial(projectId: number, itemName: string)
+
+// 智能表单组件
+<EnhancedPurchaseForm /> // 替代原SimplePurchaseForm
+```
+
+**关键技术难点及解决**：
+- **状态更新冲突**：多次单独updateItem调用导致异步冲突
+  ```typescript
+  // 问题：多次单独更新导致状态丢失
+  updateItem(itemId, 'field1', value1);
+  updateItem(itemId, 'field2', value2);
+  
+  // 解决：批量状态更新
+  setItems(items => items.map(item => 
+    item.id === itemId ? { ...item, field1: value1, field2: value2 } : item
+  ));
+  ```
+
+- **TypeScript类型推断错误**：updatedItem对象字段被推断为undefined类型
+  ```typescript
+  // 解决：显式类型注解
+  const updatedItem: EnhancedPurchaseItem = { ...item, newField: value };
+  ```
+
+#### 11. 合同清单显示字段修复 (2025-08-08)
+
+**问题症状**：合同清单页面"设备型号"显示品牌，"设备品牌"显示型号，完全相反
+
+**问题排查过程**：
+1. **API数据验证**：确认后端返回数据正确
+   ```bash
+   curl -X GET "http://localhost:8000/api/v1/purchases/contract-items/by-project/2"
+   # brand_model: "大华", specification: "DH-SH-HFS9541P-I" ✓
+   ```
+
+2. **前端显示逻辑检查**：发现表格列定义字段映射错误
+3. **Excel解析逻辑验证**：确认数据导入映射正确
+
+**根本原因**：前端表格列定义中dataIndex字段映射错误
+```typescript
+// 错误的映射
+{ title: '设备型号', dataIndex: 'brand_model' }     // 应该是specification
+{ title: '设备品牌', dataIndex: 'specification' }   // 应该是brand_model
+```
+
+**数据流分析**：
+```
+Excel文件 → 解析器 → 数据库 → API → 前端显示
+设备品牌(大华) → brand_model字段 → brand_model字段 → 错误显示在型号列
+设备型号(DH-SH-HFS9541P-I) → specification字段 → specification字段 → 错误显示在品牌列
+```
+
+**修复方案**：
+```typescript
+// 修复后的正确映射
+{ title: '设备型号', dataIndex: 'specification' }   // 显示DH-SH-HFS9541P-I
+{ title: '设备品牌', dataIndex: 'brand_model' }     // 显示大华
+```
+
+**技术启示**：
+- 字段命名与实际用途可能不匹配，需要通过数据流追踪确认
+- 前端显示问题优先检查数据源，再检查显示逻辑
+- 使用curl等工具快速验证API数据正确性
+
 ## 开发最佳实践
 
 ### 调试技巧排序
@@ -583,4 +665,4 @@ const response = await api.get('tests/latest');
 ## 文档信息
 
 **最后更新**：2025-08-08  
-**版本**：1.1.0 - 新增采购请购模块(v1.0)和重要问题修复记录
+**版本**：1.2.0 - 申购模块智能化优化与合同清单深度集成，修复字段显示问题

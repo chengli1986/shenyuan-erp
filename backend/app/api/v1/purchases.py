@@ -30,6 +30,191 @@ from app.services.purchase_service import PurchaseService
 router = APIRouter()
 
 
+# ========== 合同清单物料查询 ==========
+
+@router.get("/contract-items/by-project/{project_id}")
+async def get_contract_items_by_project(
+    project_id: int,
+    item_type: Optional[str] = Query(None, description="物料类型：主材/辅材"),
+    search: Optional[str] = Query(None, description="搜索关键字"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    根据项目获取合同清单物料
+    用于申购单表单的智能选择功能
+    """
+    # 获取项目的最新版本合同清单
+    from app.models.contract import ContractFileVersion
+    
+    latest_version = db.query(ContractFileVersion).filter(
+        ContractFileVersion.project_id == project_id,
+        ContractFileVersion.is_current == True
+    ).first()
+    
+    if not latest_version:
+        raise HTTPException(
+            status_code=404,
+            detail="该项目还没有上传合同清单"
+        )
+    
+    # 查询合同清单项目
+    query = db.query(ContractItem).filter(
+        ContractItem.project_id == project_id,
+        ContractItem.version_id == latest_version.id,
+        ContractItem.is_active == True
+    )
+    
+    # 按物料类型筛选（主要用于限制主材只能从清单选择）
+    if item_type:
+        query = query.filter(ContractItem.item_type == item_type)
+    
+    # 搜索功能
+    if search:
+        query = query.filter(
+            or_(
+                ContractItem.item_name.ilike(f"%{search}%"),
+                ContractItem.brand_model.ilike(f"%{search}%"),
+                ContractItem.specification.ilike(f"%{search}%")
+            )
+        )
+    
+    items = query.all()
+    
+    return {
+        "items": [item.to_dict() for item in items],
+        "project_id": project_id,
+        "version_id": latest_version.id,
+        "total": len(items)
+    }
+
+
+@router.get("/contract-items/{item_id}/details")
+async def get_contract_item_details(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    获取合同清单物料详细信息
+    用于自动填充申购表单的相关字段
+    """
+    item = db.query(ContractItem).filter(
+        ContractItem.id == item_id,
+        ContractItem.is_active == True
+    ).first()
+    
+    if not item:
+        raise HTTPException(status_code=404, detail="合同清单物料不存在")
+    
+    # 计算已申购数量（所有状态的申购单）
+    purchased_quantity = db.query(func.sum(PurchaseRequestItem.quantity)).filter(
+        PurchaseRequestItem.contract_item_id == item_id
+    ).scalar() or 0
+    
+    # 计算剩余可申购数量
+    remaining_quantity = float(item.quantity) - float(purchased_quantity)
+    
+    return {
+        "item": item.to_dict(),
+        "purchased_quantity": float(purchased_quantity),
+        "remaining_quantity": max(0, remaining_quantity),
+        "can_purchase": remaining_quantity > 0
+    }
+
+
+@router.get("/material-names/by-project/{project_id}")
+async def get_material_names_by_project(
+    project_id: int,
+    item_type: str = Query("主材", description="物料类型：主材/辅材"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    获取项目的物料名称列表
+    用于申购表单的下拉选择
+    """
+    from app.models.contract import ContractFileVersion
+    
+    latest_version = db.query(ContractFileVersion).filter(
+        ContractFileVersion.project_id == project_id,
+        ContractFileVersion.is_current == True
+    ).first()
+    
+    if not latest_version:
+        return {"material_names": []}
+    
+    # 获取去重的物料名称
+    material_names = db.query(ContractItem.item_name).distinct().filter(
+        ContractItem.project_id == project_id,
+        ContractItem.version_id == latest_version.id,
+        ContractItem.item_type == item_type,
+        ContractItem.is_active == True
+    ).all()
+    
+    return {
+        "material_names": [name[0] for name in material_names],
+        "item_type": item_type,
+        "project_id": project_id
+    }
+
+
+@router.get("/specifications/by-material")
+async def get_specifications_by_material(
+    project_id: int,
+    item_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    根据物料名称获取可选的规格型号
+    用于联动选择功能
+    """
+    from app.models.contract import ContractFileVersion
+    
+    latest_version = db.query(ContractFileVersion).filter(
+        ContractFileVersion.project_id == project_id,
+        ContractFileVersion.is_current == True
+    ).first()
+    
+    if not latest_version:
+        return {"specifications": []}
+    
+    # 获取该物料名称下的所有规格选项
+    items = db.query(ContractItem).filter(
+        ContractItem.project_id == project_id,
+        ContractItem.version_id == latest_version.id,
+        ContractItem.item_name == item_name,
+        ContractItem.is_active == True
+    ).all()
+    
+    specifications = []
+    for item in items:
+        # 计算已申购数量
+        purchased_quantity = db.query(func.sum(PurchaseRequestItem.quantity)).filter(
+            PurchaseRequestItem.contract_item_id == item.id
+        ).scalar() or 0
+        
+        remaining_quantity = float(item.quantity) - float(purchased_quantity)
+        
+        specifications.append({
+            "contract_item_id": item.id,
+            "specification": item.specification,
+            "brand_model": item.brand_model,
+            "unit": item.unit,
+            "total_quantity": float(item.quantity),
+            "purchased_quantity": float(purchased_quantity),
+            "remaining_quantity": max(0, remaining_quantity),
+            "unit_price": float(item.unit_price) if item.unit_price else None
+        })
+    
+    return {
+        "specifications": specifications,
+        "item_name": item_name,
+        "project_id": project_id
+    }
+
+
 # ========== 申购单管理 ==========
 
 @router.get("/", response_model=PurchaseRequestListResponse)

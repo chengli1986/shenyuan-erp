@@ -389,6 +389,256 @@
   3. **数据刷新**：多种机制并存（URL参数、事件监听、手动刷新）
   4. **用户友好性**：显示有意义的信息而非技术ID
 
+  ## 申购模块智能化升级 (2025-08-08)
+
+  ### 项目需求和开发原则
+  **核心需求**：申购模块与合同清单深度集成，确保主材采购严格符合合同约定
+  **开发理念**：
+  - "小步快跑"的迭代开发策略
+  - 用户友好的智能化操作体验
+  - 严格的业务规则约束和数据一致性保证
+  - 编程学习者友好的代码结构和文档
+
+  ### 智能化功能架构设计
+
+  #### 1. 合同清单集成API体系
+  **设计思路**：为申购表单提供智能选择数据源
+  ```python
+  # 后端API接口设计
+  @router.get("/material-names/by-project/{project_id}")
+  def get_material_names_by_project()  # 获取物料名称列表
+  
+  @router.get("/specifications/by-material")  
+  def get_specifications_by_material()  # 根据物料名称联动查询规格
+  
+  @router.get("/contract-items/{item_id}/details")
+  def get_contract_item_details()  # 获取物料详细信息和剩余数量
+  ```
+
+  #### 2. 智能表单组件设计
+  **组件职责划分**：
+  - `EnhancedPurchaseForm`：主表单容器，管理整体状态
+  - 智能选择逻辑：物料名称 → 规格型号 → 品牌单位联动
+  - 数量验证逻辑：实时计算剩余可申购数量并限制
+  
+  **状态管理策略**：
+  ```typescript
+  interface EnhancedPurchaseItem {
+    // 基础信息
+    item_name: string;
+    specification: string;
+    brand_model: string;
+    unit: string;
+    quantity: number;
+    
+    // 智能选择状态
+    availableSpecifications?: SpecificationOption[];
+    contract_item_id?: number;
+    remaining_quantity?: number;
+    
+    // 业务约束
+    max_quantity?: number;
+    unit_price?: number;
+  }
+  ```
+
+  ### 核心技术难题解决记录
+
+  #### 难题1：React状态更新异步冲突
+  **问题现象**：用户选择物料名称后，品牌、单位等字段不自动填充
+  **原因分析**：多次连续调用updateItem导致状态更新被覆盖
+  ```typescript
+  // 问题代码：异步状态更新冲突
+  const handleMaterialNameChange = async (itemId, materialName) => {
+    const response = await getSpecificationsByMaterial(projectId, materialName);
+    updateItem(itemId, 'item_name', materialName);           // 第1次更新
+    updateItem(itemId, 'availableSpecifications', response); // 第2次更新
+    updateItem(itemId, 'specification', spec.specification); // 第3次更新 - 可能被前面覆盖
+    updateItem(itemId, 'brand_model', spec.brand_model);     // 第4次更新 - 可能丢失
+  };
+  ```
+  
+  **解决策略**：批量状态更新模式
+  ```typescript
+  // 解决方案：原子化批量更新
+  const handleMaterialNameChange = async (itemId, materialName) => {
+    const response = await getSpecificationsByMaterial(projectId, materialName);
+    
+    setItems(items => items.map(item => {
+      if (item.id === itemId) {
+        const updatedItem: EnhancedPurchaseItem = {
+          ...item,
+          item_name: materialName,
+          availableSpecifications: response.specifications,
+          // 如果只有一个规格，自动选择
+          ...(response.specifications.length === 1 && {
+            specification: response.specifications[0].specification,
+            brand_model: response.specifications[0].brand_model,
+            unit: response.specifications[0].unit,
+            remaining_quantity: response.specifications[0].remaining_quantity
+          })
+        };
+        return updatedItem;
+      }
+      return item;
+    }));
+  };
+  ```
+
+  **技术要点**：
+  - 使用函数式setState确保状态更新的原子性
+  - 避免多次独立的状态更新操作
+  - 利用解构语法优雅处理条件赋值
+
+  #### 难题2：TypeScript类型推断冲突
+  **问题现象**：编译错误"Type 'number' is not assignable to type 'undefined'"
+  **原因分析**：updatedItem对象初始化时字段为undefined，TypeScript推断为严格undefined类型
+  ```typescript
+  // 问题代码：类型推断过于严格
+  const updatedItem = {
+    ...item,
+    specification: '',           // TypeScript推断为string
+    max_quantity: undefined,     // TypeScript推断为undefined
+    remaining_quantity: undefined // TypeScript推断为undefined
+  };
+  // 后续赋值失败
+  updatedItem.max_quantity = spec.total_quantity; // Error: number不能赋值给undefined
+  ```
+  
+  **解决策略**：显式类型注解
+  ```typescript
+  // 解决方案：明确类型契约
+  const updatedItem: EnhancedPurchaseItem = {
+    ...item,
+    specification: '',
+    max_quantity: undefined,     // 现在可以接受number类型
+    remaining_quantity: undefined
+  };
+  updatedItem.max_quantity = spec.total_quantity; // ✓ 编译通过
+  ```
+
+  #### 难题3：数量验证和用户体验平衡
+  **业务需求**：申购数量不能超过合同清单剩余数量，但用户输入体验要流畅
+  **解决方案**：渐进式验证策略
+  ```typescript
+  const handleQuantityChange = (itemId: string, quantity: number) => {
+    setItems(items => items.map(item => {
+      if (item.id === itemId) {
+        if (item.remaining_quantity !== undefined && quantity > item.remaining_quantity) {
+          // 用户友好的提示和自动调整
+          message.warning(`申购数量已调整为最大可申购数量 ${item.remaining_quantity}`);
+          return { ...item, quantity: Math.max(1, item.remaining_quantity) };
+        }
+        return { ...item, quantity };
+      }
+      return item;
+    }));
+  };
+  ```
+
+  ### 合同清单显示修复实战 (2025-08-08)
+
+  #### 问题发现和定位流程
+  **用户反馈**：合同清单页面设备型号和品牌显示内容相反
+  **初步假设**：可能是前端显示逻辑问题或数据库数据问题
+
+  #### 系统化排查方法论
+  
+  **第1步：数据源验证**
+  ```bash
+  # 验证API返回的原始数据
+  curl -X GET "http://localhost:8000/api/v1/purchases/contract-items/by-project/2" | \
+    python3 -c "
+    import sys, json
+    data = json.load(sys.stdin)
+    for item in data['items'][:2]:
+        print(f'设备: {item[\"item_name\"]}')
+        print(f'brand_model: {item[\"brand_model\"]}')      # 大华
+        print(f'specification: {item[\"specification\"]}')  # DH-SH-HFS9541P-I
+    "
+  ```
+  **结论**：数据库数据正确，brand_model存储品牌，specification存储型号
+
+  **第2步：数据流追踪分析**
+  ```
+  Excel导入 → 字段解析 → 数据库存储 → API返回 → 前端显示
+  设备品牌(大华) → brand_model字段 → ✓正确存储 → ✓正确返回 → ❌错误显示
+  设备型号(DH-SH-HFS9541P-I) → specification字段 → ✓正确存储 → ✓正确返回 → ❌错误显示
+  ```
+
+  **第3步：前端代码审查**
+  ```typescript
+  // 发现问题：ContractItemList.tsx中列定义错误
+  const columns = [
+    {
+      title: '设备型号',
+      dataIndex: 'brand_model',    // ❌ 错误：应该是specification
+    },
+    {
+      title: '设备品牌', 
+      dataIndex: 'specification',  // ❌ 错误：应该是brand_model
+    }
+  ];
+  ```
+
+  **第4步：Excel解析逻辑确认**
+  ```python
+  # backend/app/utils/excel_parser.py
+  HEADER_MAPPING = {
+      '设备品牌': 'brand_model',     # ✓ 正确：Excel品牌列 → brand_model字段
+      '设备型号': 'specification',   # ✓ 正确：Excel型号列 → specification字段
+  }
+  ```
+
+  #### 根本原因总结
+  **问题本质**：字段命名语义与实际用途不匹配导致的混淆
+  - 数据库字段`brand_model`注释为"品牌型号"，容易误解为包含型号
+  - 实际存储：`brand_model`只存品牌，`specification`存储型号
+  - 前端开发时按字面意思理解字段含义，导致映射错误
+
+  #### 修复和验证
+  ```typescript
+  // 修复：正确的字段映射
+  {
+    title: '设备型号',
+    dataIndex: 'specification',    // ✓ 显示DH-SH-HFS9541P-I
+  },
+  {
+    title: '设备品牌',
+    dataIndex: 'brand_model',      // ✓ 显示大华
+  }
+  ```
+
+  ### 技术债务和改进建议
+
+  #### 1. 数据库字段命名优化建议
+  **现状问题**：
+  - `brand_model`字段名暗示包含型号，但实际只存品牌
+  - `specification`字段名偏向规格描述，但实际存储具体型号
+
+  **建议改进**：
+  - `brand_model` → `brand` (品牌)
+  - `specification` → `model_number` (具体型号)
+
+  #### 2. 开发流程改进
+  **字段映射验证清单**：
+  - [ ] 新增字段时明确语义和用途
+  - [ ] 前端组件开发前验证API数据结构
+  - [ ] 使用TypeScript接口明确字段类型和含义
+  - [ ] 添加单元测试验证数据映射正确性
+
+  #### 3. 调试工具箱扩展
+  **快速验证命令**：
+  ```bash
+  # API数据验证模板
+  curl -s "http://localhost:8000/api/v1/endpoint" | \
+    python3 -c "import sys,json; data=json.load(sys.stdin); print(json.dumps(data[:1], indent=2, ensure_ascii=False))"
+  
+  # 字段映射验证模板
+  grep -r "dataIndex.*field_name" frontend/src/ # 查找字段使用
+  grep -r "field_name.*comment" backend/app/models/ # 查找字段定义
+  ```
+
   ## 核心调试技巧
   1. 使用curl测试API连接性
   2. 使用netstat检查端口占用
