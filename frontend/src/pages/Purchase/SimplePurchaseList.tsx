@@ -33,11 +33,17 @@ const SimplePurchaseList: React.FC = () => {
   const [currentDetail, setCurrentDetail] = useState<SimplePurchaseRequest | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // 加载申购单列表 - 最简单的实现
+  // 加载申购单列表 - 使用认证token
   const loadPurchaseRequests = async (showMessage = false) => {
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/purchases/');
+      const token = localStorage.getItem('access_token');
+      const response = await fetch('/api/v1/purchases/', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
       if (response.ok) {
         const result = await response.json();
         setData(result.items || []);
@@ -45,6 +51,11 @@ const SimplePurchaseList: React.FC = () => {
           message.success(`加载成功，共${result.items?.length || 0}条申购单`);
         }
         console.log('申购单数据已更新:', result.items?.length || 0, '条记录');
+      } else if (response.status === 401) {
+        message.error('请重新登录');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('currentUser');
+        window.location.reload();
       } else {
         message.error('加载申购单失败');
       }
@@ -87,13 +98,27 @@ const SimplePurchaseList: React.FC = () => {
   const viewPurchaseDetail = async (record: SimplePurchaseRequest) => {
     setDetailLoading(true);
     try {
-      const response = await fetch(`/api/v1/purchases/${record.id}`);
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`/api/v1/purchases/${record.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
       if (response.ok) {
         const detail = await response.json();
+        console.log('✅ 申购单详情加载成功:', detail);
         setCurrentDetail(detail);
         setDetailVisible(true);
+      } else if (response.status === 401) {
+        message.error('请重新登录');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('currentUser');
+        window.location.reload();
       } else {
-        message.error('加载申购单详情失败');
+        const errorText = await response.text();
+        console.error('API错误:', response.status, errorText);
+        message.error(`加载申购单详情失败: ${response.status}`);
       }
     } catch (error) {
       console.error('加载申购单详情失败:', error);

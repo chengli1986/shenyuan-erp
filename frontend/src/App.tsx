@@ -1,7 +1,7 @@
 // frontend/src/App.tsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { ConfigProvider, Layout, Menu, theme } from 'antd';
+import { ConfigProvider, Layout, Menu, theme, Button, Dropdown } from 'antd';
 import {
   ProjectOutlined,
   FileTextOutlined,
@@ -9,9 +9,12 @@ import {
   InboxOutlined,
   BarChartOutlined,
   UserOutlined,
-  ExperimentOutlined
+  ExperimentOutlined,
+  LogoutOutlined
 } from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
+import { authService, User } from './services/auth';
+import Login from './components/Login';
 
 // 导入页面组件
 import ProjectList from './pages/Project/ProjectList';
@@ -31,6 +34,12 @@ function AppContent() {
   const { token } = useToken();
   const navigate = useNavigate();
   const location = useLocation();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  
+  useEffect(() => {
+    const user = authService.getCurrentUser();
+    setCurrentUser(user);
+  }, []);
   
   // 菜单项配置
   const menuItems = [
@@ -70,6 +79,16 @@ function AppContent() {
       label: '系统测试',
     },
   ];
+
+  const handleLoginSuccess = () => {
+    const user = authService.getCurrentUser();
+    setCurrentUser(user);
+  };
+
+  // 如果用户未登录，显示登录页面
+  if (!authService.isLoggedIn()) {
+    return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -129,7 +148,30 @@ function AppContent() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <ConnectionStatus />
-                <span>👨‍💼 张工程师</span>
+                <Dropdown
+                  menu={{
+                    items: [
+                      {
+                        key: 'profile',
+                        label: '个人信息',
+                        icon: <UserOutlined />,
+                      },
+                      {
+                        key: 'logout',
+                        label: '退出登录',
+                        icon: <LogoutOutlined />,
+                        onClick: () => {
+                          authService.logout();
+                          setCurrentUser(null);
+                        },
+                      },
+                    ],
+                  }}
+                >
+                  <Button type="text">
+                    👤 {currentUser?.name || '用户'}
+                  </Button>
+                </Dropdown>
                 <span style={{ color: token.colorTextSecondary }}>
                   {new Date().toLocaleDateString('zh-CN')}
                 </span>

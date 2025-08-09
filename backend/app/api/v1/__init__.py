@@ -6,7 +6,7 @@ API v1版本路由汇总
 """
 
 from fastapi import APIRouter
-from . import projects, project_files, contracts, file_upload, test_results, test_simple, test_minimal, purchases
+from . import projects, project_files, contracts, file_upload, test_results, test_simple, test_minimal, purchases, auth
 
 # 创建v1版本的主路由
 api_router = APIRouter()
@@ -65,5 +65,12 @@ api_router.include_router(
     purchases.router,
     prefix="/purchases",
     tags=["purchases"]
+)
+
+# 注册用户认证相关的API路由
+api_router.include_router(
+    auth.router,
+    prefix="/auth",
+    tags=["authentication"]
 )
 

@@ -15,6 +15,7 @@ from .contract import (
 
 # 导入用户相关模型
 from .user import User  # 用户信息模型
+from .permission import RolePermission, PermissionCategory  # 权限管理模型
 
 # 导入采购请购相关模型
 from .purchase import (
@@ -35,6 +36,8 @@ __all__ = [
     "SystemCategory",
     "ContractItem",
     "User",
+    "RolePermission", 
+    "PermissionCategory",
     "PurchaseRequest",
     "PurchaseRequestItem",
     "PurchaseApproval",

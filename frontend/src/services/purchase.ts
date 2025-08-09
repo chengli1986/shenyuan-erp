@@ -20,6 +20,8 @@ import {
   AuxiliaryRecommendation
 } from '../types/purchase';
 
+import api from './api';
+
 // 使用相对路径通过代理访问API
 const API_BASE = '/api/v1';
 
@@ -49,13 +51,12 @@ export async function getContractItemsByProject(
   version_id: number;
   total: number;
 }> {
-  const queryString = new URLSearchParams();
-  if (itemType) queryString.append('item_type', itemType);
-  if (search) queryString.append('search', search);
+  const params = new URLSearchParams();
+  if (itemType) params.append('item_type', itemType);
+  if (search) params.append('search', search);
 
-  const url = `${API_BASE}/purchases/contract-items/by-project/${projectId}${queryString.toString() ? `?${queryString}` : ''}`;
-  const response = await fetch(url);
-  return handleResponse(response);
+  const response = await api.get(`purchases/contract-items/by-project/${projectId}${params.toString() ? `?${params}` : ''}`);
+  return response.data;
 }
 
 /**
@@ -84,8 +85,8 @@ export async function getMaterialNamesByProject(
   item_type: string;
   project_id: number;
 }> {
-  const response = await fetch(`${API_BASE}/purchases/material-names/by-project/${projectId}?item_type=${itemType}`);
-  return handleResponse(response);
+  const response = await api.get(`purchases/material-names/by-project/${projectId}?item_type=${itemType}`);
+  return response.data;
 }
 
 /**
@@ -108,10 +109,10 @@ export async function getSpecificationsByMaterial(
   item_name: string;
   project_id: number;
 }> {
-  const response = await fetch(
-    `${API_BASE}/purchases/specifications/by-material?project_id=${projectId}&item_name=${encodeURIComponent(itemName)}`
+  const response = await api.get(
+    `purchases/specifications/by-material?project_id=${projectId}&item_name=${encodeURIComponent(itemName)}`
   );
-  return handleResponse(response);
+  return response.data;
 }
 
 // ============================
@@ -157,14 +158,8 @@ export async function getPurchaseRequest(requestId: number): Promise<PurchaseReq
 export async function createPurchaseRequest(
   requestData: PurchaseRequestCreate
 ): Promise<PurchaseRequest> {
-  const response = await fetch(`${API_BASE}/purchases/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestData),
-  });
-  return handleResponse<PurchaseRequest>(response);
+  const response = await api.post('purchases/', requestData);
+  return response.data;
 }
 
 /**

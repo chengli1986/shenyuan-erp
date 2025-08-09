@@ -45,7 +45,10 @@
       "Bash(timedatectl:*)",
       "Bash(git commit:*)",
       "Bash(sudo apt:*)",
-      "Bash(sudo apt install:*)"
+      "Bash(sudo apt install:*)",
+      "Bash(./scripts/check-erp.sh:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm start)"
     ],
     "deny": []
   }

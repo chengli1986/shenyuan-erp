@@ -218,6 +218,87 @@ shenyuan-erp/
 
 ## 故障排除
 
+### 权限系统集成问题 (2025-08-09)
+
+#### 问题场景
+用户权限系统开发后，现有功能（如申购模块）出现数据无法显示、保存失败等问题。
+
+#### 根本原因
+前端API调用缺少JWT认证token，导致401未授权错误。
+
+**技术细节**：
+- 前端直接使用`fetch`调用而非封装的`api`实例
+- `api.ts`已配置自动token附加，但某些组件绕过了该机制
+- 后端权限限制过于严格，业务角色无法执行必要操作
+
+#### 系统化排查方法
+```bash
+# 1. 验证后端API和数据完整性
+curl -X GET "http://localhost:8000/api/v1/purchases/" \
+     -H "Authorization: Bearer $TOKEN"
+
+# 2. 检查前端API调用方式
+grep -r "fetch.*api/v1" frontend/src/
+# 找出直接使用fetch的地方
+
+# 3. 验证权限配置
+curl -X POST "http://localhost:8000/api/v1/auth/login" \
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     -d "username=purchaser&password=purchase123"
+```
+
+#### 修复方案
+1. **统一API调用方式**
+```typescript
+// 错误：直接使用fetch
+const response = await fetch('/api/v1/purchases/', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+
+// 正确：使用封装的api实例
+const response = await api.get('purchases/');
+```
+
+2. **调整后端权限策略**
+```python
+# 修复前：过于严格
+if current_user.role not in ["project_manager", "admin"]:
+    raise HTTPException(status_code=403, detail="只有项目经理可以创建申购单")
+
+# 修复后：符合业务需求
+if current_user.role not in ["project_manager", "purchaser", "admin"]:
+    raise HTTPException(status_code=403, detail="只有项目经理和采购员可以创建申购单")
+```
+
+3. **前端错误处理**
+```typescript
+// 在api.ts中添加401自动处理
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('currentUser');
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
+#### 经验总结
+1. **权限系统集成检查清单**：
+   - [ ] 所有API调用使用统一认证机制
+   - [ ] 后端权限配置符合业务流程需求
+   - [ ] 前端有完善的401错误处理
+   - [ ] 数据库原有数据完整性验证
+
+2. **调试技巧**：
+   - 先验证后端API和数据完整性
+   - 使用`grep`查找前端API调用模式
+   - 分角色测试功能权限边界
+   - 检查浏览器Network面板定位具体错误
+
 ### 常见问题解决
 
 #### 1. 前端显示"后端未连接"
@@ -603,6 +684,51 @@ Excel文件 → 解析器 → 数据库 → API → 前端显示
      -H "Origin: http://localhost:3000" \
      -H "Access-Control-Request-Method: GET"
    ```
+
+### 权限系统集成开发流程
+
+**基于2025-08-09权限系统开发经验总结**
+
+#### 1. 权限系统开发原则
+- **数据保护优先**：任何系统性修改前都要验证数据完整性
+- **渐进式集成**：先确保现有功能正常，再扩展新的权限功能
+- **业务驱动设计**：权限配置必须符合实际业务流程需求
+
+#### 2. 前端API调用标准化
+```typescript
+// ❌ 错误：直接使用fetch绕过认证
+const response = await fetch('/api/v1/purchases/', {
+  headers: { 'Content-Type': 'application/json' }
+});
+
+// ✅ 正确：使用统一api实例自动附加token
+const response = await api.get('purchases/');
+```
+
+#### 3. 权限问题调试黄金流程
+```bash
+# 第一步：数据完整性验证
+curl -s "http://localhost:8000/api/v1/purchases/" -H "Authorization: Bearer $TOKEN"
+
+# 第二步：前端API调用审查
+grep -r "fetch.*api/v1" frontend/src/ --include="*.ts" --include="*.tsx"
+
+# 第三步：权限配置验证
+curl -X POST "http://localhost:8000/api/v1/auth/login" -d "username=purchaser&password=purchase123"
+
+# 第四步：角色权限边界测试
+for role in admin general_manager purchaser; do
+  echo "Testing $role permissions..."
+  # 测试每个角色的功能访问权限
+done
+```
+
+#### 4. 认证集成检查清单
+- [ ] 所有API调用使用`services/api.ts`而非直接`fetch`
+- [ ] 前端有完善的401错误自动重新登录处理
+- [ ] 后端权限配置与业务流程匹配
+- [ ] 不同角色的功能权限边界测试通过
+- [ ] 原有数据100%完整性保持
 
 ### 开发流程
 

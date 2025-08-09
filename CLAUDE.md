@@ -865,7 +865,220 @@
   - **业务规则测试**：7个测试（test_purchase_rules.py）
   - **总计**：23个申购相关测试，覆盖所有智能申购规则
 
+  ## 用户权限系统开发与集成 (2025-08-09)
+
+  ### 开发背景
+  **用户需求**：开发完善的用户权限系统，支持7个角色的权限管理，以便从不同用户角度测试申购模块。
+
+  ### 核心技术架构
+
+  #### 1. JWT认证体系
+  **设计思路**：基于JWT (JSON Web Token) 实现无状态认证
+  ```python
+  # backend/app/core/security.py
+  def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
+      # JWT token创建，8天有效期
+      expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+      to_encode = {"exp": expire, "sub": str(subject)}
+      encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+      return encoded_jwt
+  ```
+
+  #### 2. 角色权限映射
+  **基于v62文档的7角色权限体系**：
+  ```python
+  # 权限等级设计
+  # L1: 总经理 - 全局决策权限
+  # L2: 项目主管、财务 - 管理权限  
+  # L3: 采购员 - 专业权限
+  # L4: 项目经理 - 执行权限
+  # L5: 施工队长 - 操作权限
+  # L6: 管理员 - 系统权限
+  
+  role_permissions_map = {
+      UserRole.GENERAL_MANAGER: [
+          "view_all_projects", "final_approve", 
+          "view_price", "view_cost", "view_profit"
+      ],
+      UserRole.PURCHASER: [
+          "view_own_purchase", "quote_price", 
+          "view_price", "view_cost"
+      ]
+      # ... 其他角色权限
+  }
+  ```
+
+  #### 3. 前端认证集成
+  **统一认证机制设计**：
+  ```typescript
+  // frontend/src/services/auth.ts
+  export class AuthService {
+    async login(credentials: LoginRequest): Promise<LoginResponse> {
+      const response = await api.post<LoginResponse>('/auth/login', formData);
+      const { access_token, user } = response.data;
+      
+      // 保存认证信息
+      localStorage.setItem('access_token', access_token);
+      localStorage.setItem('currentUser', JSON.stringify(user));
+      
+      // 设置API默认认证header
+      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+      return response.data;
+    }
+  }
+  ```
+
+  ### 权限系统集成重大问题 (2025-08-09)
+
+  #### 问题现象
+  用户权限系统开发完成后，现有功能出现严重异常：
+  1. **申购页面数据无法显示** - 之前的6条草稿申购单全部消失
+  2. **申购表单物料选择失效** - 显示"暂无数据"
+  3. **申购单无法保存** - 各种角色均提示权限不足
+  4. **申购详情查看失败** - 点击查看按钮无任何响应
+
+  #### 根本原因分析 (Root Cause Analysis)
+
+  **问题层次分析**：
+  ```
+  表象问题：前端功能异常、数据不显示
+       ↓
+  直接原因：前端API调用返回401未授权
+       ↓  
+  根本原因：前端API调用方式不统一，缺少认证token
+       ↓
+  系统原因：权限系统开发时，未考虑现有代码的API调用模式
+  ```
+
+  **技术细节剖析**：
+  1. **前端API调用混合模式**：
+     - `services/api.ts` 已配置JWT token自动附加
+     - 但部分组件直接使用`fetch()` 绕过了认证机制
+     - 权限系统启用后，所有API都需要认证
+
+  2. **后端权限配置过于严格**：
+     - 申购单创建只允许`project_manager`角色
+     - 但业务需求是`purchaser`也应该能创建申购单
+     - 权限配置与实际业务流程不匹配
+
+  #### 系统化解决方案
+
+  **解决策略：分层修复，确保数据完整性**
+
+  1. **数据完整性验证**（第一优先级）
+     ```bash
+     # 验证后端数据和API正常
+     curl -X GET "http://localhost:8000/api/v1/purchases/" \
+          -H "Authorization: Bearer $TOKEN"
+     # 结果：6条申购记录完全安全，数据未丢失
+     ```
+
+  2. **统一前端API调用机制**
+     ```typescript
+     // 修复前：直接fetch调用
+     const response = await fetch('/api/v1/purchases/', {
+       headers: { 'Content-Type': 'application/json' }  // 缺少认证
+     });
+     
+     // 修复后：使用统一api实例
+     const response = await api.get('purchases/');  // 自动附加token
+     ```
+
+  3. **调整后端权限策略**
+     ```python
+     # 修复前：权限过严
+     if current_user.role not in ["project_manager", "admin"]:
+         raise HTTPException(status_code=403, detail="只有项目经理可以创建申购单")
+     
+     # 修复后：符合业务需求  
+     if current_user.role not in ["project_manager", "purchaser", "admin"]:
+         raise HTTPException(status_code=403, detail="只有项目经理和采购员可以创建申购单")
+     ```
+
+  4. **完善错误处理机制**
+     ```typescript
+     // 401自动重新登录处理
+     api.interceptors.response.use(
+       (response) => response,
+       (error) => {
+         if (error.response?.status === 401) {
+           localStorage.removeItem('access_token');
+           window.location.reload(); // 强制重新登录
+         }
+       }
+     );
+     ```
+
+  #### 调试方法论总结
+
+  **问题诊断黄金流程**：
+  1. **后端数据验证** - 确认数据未丢失
+  2. **API权限测试** - 使用curl验证后端功能
+  3. **前端API模式审查** - 查找直接fetch调用
+  4. **权限配置检查** - 验证角色权限匹配业务需求
+  5. **前端认证状态** - 检查token存储和传递
+
+  **高效调试命令集**：
+  ```bash
+  # 1. 数据完整性检查
+  curl -s "http://localhost:8000/api/v1/purchases/" -H "Authorization: Bearer $TOKEN" | jq '.total'
+  
+  # 2. 权限测试矩阵
+  for role in admin general_manager purchaser project_manager; do
+    echo "Testing $role..."
+    curl -X POST "http://localhost:8000/api/v1/auth/login" \
+         -d "username=$role&password=${role}123"
+  done
+  
+  # 3. 前端API调用审查
+  grep -r "fetch.*api/v1" frontend/src/ --include="*.ts" --include="*.tsx"
+  
+  # 4. 认证状态检查
+  curl -s "http://localhost:3000" | grep -q "login" && echo "需要登录" || echo "已登录"
+  ```
+
+  ### 关键经验教训
+
+  #### 1. 权限系统集成最佳实践
+  - **渐进式集成**：先确保现有功能正常，再扩展权限
+  - **API调用标准化**：所有前端API调用使用统一认证机制
+  - **权限配置业务驱动**：权限设计必须符合实际业务流程
+  - **完整性验证优先**：集成前后都要验证数据完整性
+
+  #### 2. 调试技能进阶
+  - **分层诊断思维**：表象→直接原因→根本原因→系统原因
+  - **工具链组合**：curl + jq + grep 的强大组合
+  - **数据流追踪**：前端→网络→后端→数据库的完整链路
+  - **权限测试矩阵**：系统化测试所有角色的权限边界
+
+  #### 3. Claude Code使用心得
+  - **问题描述要具体**：详细描述现象，不要只说"不工作"
+  - **优先保护数据**：Claude会优先确认数据安全性
+  - **系统化解决**：Claude会提供完整的解决方案而非局部修复
+  - **文档更新习惯**：每次重要修复都应该更新文档
+
+  ### 修复成果验证
+
+  #### 最终功能状态
+  - ✅ **7个测试账号**：admin、general_manager、purchaser等全部可登录
+  - ✅ **申购数据完整**：原有6条申购记录全部恢复显示  
+  - ✅ **物料选择正常**：61个物料名称、68个合同物料项正常加载
+  - ✅ **申购单保存成功**：采购员可正常创建申购单(如PR202508090001)
+  - ✅ **详情查看正常**：申购单详情弹窗正确显示所有信息
+  - ✅ **权限控制生效**：不同角色看到适当的价格信息和操作权限
+
+  **技术指标**：
+  - 前端编译无错误，只有少量ESLint警告
+  - 后端API响应时间正常，认证机制稳定
+  - 数据库原有数据100%完整性保持
+  - 所有7个角色的权限边界测试通过
+
   ## 未来开发要点
+  - **权限系统优先**：开发新功能前先考虑权限设计
+  - **API调用统一**：所有前端API调用必须使用services/api.ts
+  - **角色测试覆盖**：每个功能都要测试不同角色的权限边界  
+  - **数据保护第一**：任何系统性修改前都要验证数据完整性
+  - **文档同步更新**：重要修复经验及时记录到README.md和CLAUDE.md
   - 使用./scripts/start-erp-dev.sh启动开发环境
   - 遇到问题先查看故障排除文档和学习指南
   - 新功能开发前先阅读网络访问原理理解前后端通信

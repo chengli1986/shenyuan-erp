@@ -334,12 +334,12 @@ async def create_purchase_request(
     current_user: User = Depends(deps.get_current_user)
 ):
     """
-    创建申购单（项目经理）
+    创建申购单（项目经理、采购员）
     - 主材必须关联合同清单项并进行数量校验
     - 辅材可以自由添加
     """
-    if current_user.role not in ["project_manager", "admin"]:
-        raise HTTPException(status_code=403, detail="只有项目经理可以创建申购单")
+    if current_user.role not in ["project_manager", "purchaser", "admin"]:
+        raise HTTPException(status_code=403, detail="只有项目经理和采购员可以创建申购单")
     
     # 验证项目存在
     project = db.query(Project).filter(Project.id == request_data.project_id).first()

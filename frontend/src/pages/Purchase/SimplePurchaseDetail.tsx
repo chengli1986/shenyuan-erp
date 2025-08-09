@@ -20,7 +20,12 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
   purchaseData,
   onClose
 }) => {
-  if (!purchaseData) return null;
+  console.log('SimplePurchaseDetail props:', { visible, purchaseData });
+  
+  if (!purchaseData) {
+    console.log('No purchaseData, returning null');
+    return null;
+  }
 
   const columns = [
     {
