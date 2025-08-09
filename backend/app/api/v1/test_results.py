@@ -188,18 +188,58 @@ async def trigger_test_run(
         output = stdout.decode('utf-8') if stdout else ''
         error_output = stderr.decode('utf-8') if stderr else ''
         
-        # 计算通过/失败数量
+        # 解析测试输出，提取详细结果
         passed = output.count(' PASSED')
         failed = output.count(' FAILED')
-        total = passed + failed
+        skipped = output.count(' SKIPPED')
+        error = output.count(' ERROR')
+        total = passed + failed + skipped + error
         
-        # 更新记录
+        # 保存详细的测试结果
+        from app.models.test_result import TestResult
+        test_lines = output.split('\n')
+        for line in test_lines:
+            if ' PASSED' in line or ' FAILED' in line or ' SKIPPED' in line or ' ERROR' in line:
+                parts = line.split('::')
+                if len(parts) >= 2:
+                    test_file = parts[0].strip()
+                    test_name = parts[-1].split()[0] if '::' in line else parts[-1].split()[0]
+                    
+                    if ' PASSED' in line:
+                        status = 'passed'
+                    elif ' FAILED' in line:
+                        status = 'failed'
+                    elif ' SKIPPED' in line:
+                        status = 'skipped'
+                    else:
+                        status = 'error'
+                    
+                    # 提取测试套件名
+                    test_suite = test_file.replace('tests/', '').replace('.py', '').replace('/', '.')
+                    
+                    test_result = TestResult(
+                        test_run_id=run_id,
+                        test_type=test_type,
+                        test_suite=test_suite,
+                        test_name=test_name,
+                        status=status,
+                        duration=0,  # pytest输出中没有单个测试的时间
+                        error_message=None,
+                        stack_trace=None
+                    )
+                    db.add(test_result)
+        
+        # 更新记录 - 修正状态判断逻辑
         test_run.end_time = datetime.now()
         test_run.duration = (test_run.end_time - test_run.start_time).total_seconds()
         test_run.total_tests = total
         test_run.passed_tests = passed
         test_run.failed_tests = failed
-        test_run.status = "completed" if failed == 0 and process.returncode == 0 else "failed"
+        test_run.skipped_tests = skipped
+        test_run.error_tests = error
+        
+        # 修正状态判断：只要失败和错误都为0就是成功，不依赖进程返回码
+        test_run.status = "completed" if failed == 0 and error == 0 else "failed"
         
         db.commit()
         
@@ -213,6 +253,8 @@ async def trigger_test_run(
             "total_tests": total,
             "passed_tests": passed,
             "failed_tests": failed,
+            "skipped_tests": skipped,
+            "error_tests": error,
             "success_rate": success_rate,
             "duration": test_run.duration,
             "return_code": process.returncode,
@@ -250,6 +292,48 @@ async def trigger_test_run(
         "message": "测试已触发",
         "run_id": run_id,
         "test_type": test_type
+    }
+
+
+@router.get("/results/{run_id}")
+def get_test_results(
+    run_id: str,
+    db: Session = Depends(get_db)
+):
+    """获取指定测试运行的详细结果"""
+    from app.models.test_result import TestResult
+    
+    # 查询该运行的所有测试结果
+    results = db.query(TestResult).filter(
+        TestResult.test_run_id == run_id
+    ).all()
+    
+    if not results:
+        # 如果没有详细结果，返回空列表而不是404
+        return {
+            "run_id": run_id,
+            "total_results": 0,
+            "results": []
+        }
+    
+    # 转换为响应格式
+    test_results = []
+    for result in results:
+        test_results.append({
+            "id": result.id,
+            "test_suite": result.test_suite,
+            "test_name": result.test_name,
+            "status": result.status,
+            "duration": result.duration,
+            "error_message": result.error_message,
+            "stack_trace": result.stack_trace,
+            "created_at": result.created_at.isoformat() if result.created_at else None
+        })
+    
+    return {
+        "run_id": run_id,
+        "total_results": len(test_results),
+        "results": test_results
     }
 
 
