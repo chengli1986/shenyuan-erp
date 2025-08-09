@@ -190,6 +190,10 @@ frontend/*.log
 backend/test_reports/
 test_reports/
 
+# 临时脚本和分析文件
+temp_scripts/
+analyze_*.py
+
 # 备份文件
 *.bak
 *.backup
