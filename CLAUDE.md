@@ -1073,11 +1073,103 @@
   - 数据库原有数据100%完整性保持
   - 所有7个角色的权限边界测试通过
 
+  ## 申购单分页功能修复记录 (2025-08-16)
+
+  ### 问题描述
+  **症状**：用户设置每页显示20/50/100条记录时，页面仍然只显示10条记录
+  **影响**：分页功能失效，用户无法按需调整显示数量，新建申购单可能不在第一页显示
+
+  ### 根本原因分析
+  **技术细节**：前后端API参数名不匹配导致分页失效
+  ```
+  前端发送参数：/api/v1/purchases/?page=1&page_size=20
+  后端期望参数：/api/v1/purchases/?page=1&size=20
+  结果：后端使用默认值size=10，忽略前端传递的页面大小
+  ```
+
+  ### 调试过程
+  ```bash
+  # 1. 验证后端数据完整性
+  curl "http://localhost:8000/api/v1/purchases/?page=1&page_size=20" 
+  # 返回：10条记录（预期20条）
+  
+  # 2. 测试正确参数名
+  curl "http://localhost:8000/api/v1/purchases/?page=1&size=20"
+  # 返回：18条记录（全部数据）✓
+  
+  # 3. 对比后端API定义
+  # backend/app/api/v1/purchases.py:223
+  # size: int = Query(10, ge=1, le=100)  # 参数名为'size'
+  ```
+
+  ### 解决方案
+  **前端API调用修正**：
+  ```typescript
+  // 修复前：参数名错误
+  const response = await fetch(`/api/v1/purchases/?page=${page}&page_size=${size}`);
+  
+  // 修复后：使用正确参数名
+  const response = await fetch(`/api/v1/purchases/?page=${page}&size=${size}`);
+  ```
+
+  ### 验证结果
+  - ✅ size=20：显示全部18条申购单
+  - ✅ size=50：显示全部18条申购单
+  - ✅ size=100：显示全部18条申购单
+  - ✅ 分页控件正常工作，用户体验完整
+
+  ### 关键经验总结
+  1. **API参数命名一致性**：前后端参数名必须严格匹配
+  2. **curl调试技巧**：直接测试API端点快速定位问题
+  3. **分层排查方法**：先验证后端，再检查前端，最后确认参数传递
+  4. **文档同步重要性**：API变更时同步更新前端调用代码
+
+  ## React应用无限加载问题修复记录 (2025-08-15)
+
+  ### 问题描述
+  **症状**：用户登录成功后，主React应用在http://18.219.25.24:3000/出现无限加载
+  **现象**：登录页面工作正常，token保存成功，但进入主应用后页面卡住
+
+  ### 根本原因分析
+  **技术细节**：复杂组件导入和ConnectionProvider引起的初始化循环
+  ```typescript
+  // 问题代码：复杂的组件导入链
+  import ConnectionStatus from './components/ConnectionStatus';
+  import { ConnectionProvider } from './contexts/ConnectionContext';
+  
+  // 导致：组件初始化时出现循环依赖和性能问题
+  ```
+
+  ### 解决策略
+  **渐进式简化**：创建多个测试版本，逐步排除问题组件
+  ```typescript
+  // AppClean.tsx：移除复杂组件
+  // - 移除ConnectionProvider包装
+  // - 简化用户认证逻辑
+  // - 移除性能影响的debug日志
+  
+  // authService优化：
+  isLoggedIn(): boolean {
+    const token = localStorage.getItem('access_token');
+    return token !== null && this.currentUser !== null;
+  }
+  ```
+
+  ### 关键调试技巧
+  1. **组件分离测试**：创建最小可行版本逐步添加功能
+  2. **性能日志清理**：移除console.log等调试语句
+  3. **依赖关系简化**：避免复杂的组件导入链
+  4. **用户反馈验证**：每个版本都让用户测试确认
+
   ## 未来开发要点
   - **权限系统优先**：开发新功能前先考虑权限设计
   - **API调用统一**：所有前端API调用必须使用services/api.ts
+  - **参数命名一致性**：前后端API参数名必须严格匹配
   - **角色测试覆盖**：每个功能都要测试不同角色的权限边界  
   - **数据保护第一**：任何系统性修改前都要验证数据完整性
+  - **渐进式调试**：复杂问题采用分层排查和组件分离策略
+  - **curl验证优先**：API问题先用curl直接测试后端
+  - **用户体验测试**：每次修复都要求用户验证功能正常
   - **文档同步更新**：重要修复经验及时记录到README.md和CLAUDE.md
   - 使用./scripts/start-erp-dev.sh启动开发环境
   - 遇到问题先查看故障排除文档和学习指南

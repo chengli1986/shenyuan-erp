@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table,
   Button,
@@ -29,16 +29,19 @@ const SimplePurchaseList: React.FC = () => {
   const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<SimplePurchaseRequest[]>([]);
+  const [total, setTotal] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentDetail, setCurrentDetail] = useState<SimplePurchaseRequest | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // 加载申购单列表 - 使用认证token
-  const loadPurchaseRequests = async (showMessage = false) => {
+  // 加载申购单列表 - 支持分页
+  const loadPurchaseRequests = useCallback(async (page = currentPage, size = pageSize, showMessage = false) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch('/api/v1/purchases/', {
+      const response = await fetch(`/api/v1/purchases/?page=${page}&size=${size}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -47,10 +50,12 @@ const SimplePurchaseList: React.FC = () => {
       if (response.ok) {
         const result = await response.json();
         setData(result.items || []);
+        setTotal(result.total || 0);
+        setCurrentPage(page);
         if (showMessage) {
-          message.success(`加载成功，共${result.items?.length || 0}条申购单`);
+          message.success(`加载成功，共${result.total || 0}条申购单，当前第${page}页`);
         }
-        console.log('申购单数据已更新:', result.items?.length || 0, '条记录');
+        console.log('申购单数据已更新:', result.total || 0, '条记录，当前页:', result.items?.length || 0, '条');
       } else if (response.status === 401) {
         message.error('请重新登录');
         localStorage.removeItem('access_token');
@@ -65,34 +70,34 @@ const SimplePurchaseList: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, pageSize]);
 
   // 页面加载时获取数据
   useEffect(() => {
     loadPurchaseRequests();
-  }, []);
+  }, [loadPurchaseRequests]);
 
   // 监听 URL 参数变化，重新加载数据
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     if (searchParams.get('refresh')) {
-      loadPurchaseRequests();
+      loadPurchaseRequests(currentPage, pageSize);
       // 清理 URL 参数
       navigate('/purchases', { replace: true });
     }
-  }, [location.search, navigate]);
+  }, [location.search, navigate, currentPage, pageSize, loadPurchaseRequests]);
 
   // 页面获得焦点时刷新数据
   useEffect(() => {
     const handleFocus = () => {
-      loadPurchaseRequests();
+      loadPurchaseRequests(currentPage, pageSize);
     };
 
     window.addEventListener('focus', handleFocus);
     return () => {
       window.removeEventListener('focus', handleFocus);
     };
-  }, []);
+  }, [currentPage, pageSize, loadPurchaseRequests]);
 
   // 查看申购单详情
   const viewPurchaseDetail = async (record: SimplePurchaseRequest) => {
@@ -198,7 +203,7 @@ const SimplePurchaseList: React.FC = () => {
           <Space>
             <Button 
               loading={loading}
-              onClick={() => loadPurchaseRequests(true)}
+              onClick={() => loadPurchaseRequests(currentPage, pageSize, true)}
             >
               刷新数据
             </Button>
@@ -219,8 +224,24 @@ const SimplePurchaseList: React.FC = () => {
           rowKey="id"
           loading={loading}
           pagination={{
-            pageSize: 10,
-            showTotal: (total) => `共 ${total} 条申购单`
+            current: currentPage,
+            pageSize: pageSize,
+            total: total,
+            showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条申购单`,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            onChange: (page, size) => {
+              if (size !== pageSize) {
+                setPageSize(size);
+                loadPurchaseRequests(1, size);
+              } else {
+                loadPurchaseRequests(page, size);
+              }
+            },
+            onShowSizeChange: (current, size) => {
+              setPageSize(size);
+              loadPurchaseRequests(1, size);
+            }
           }}
           locale={{ 
             emptyText: '暂无申购单数据，请点击"新建申购单"创建' 
@@ -235,8 +256,11 @@ const SimplePurchaseList: React.FC = () => {
         size="small"
       >
         <div style={{ fontSize: '12px', color: '#666' }}>
-          <p>数据量：{data.length} 条</p>
-          <p>API地址：/api/v1/purchases/</p>
+          <p>当前页数据：{data.length} 条</p>
+          <p>总数据量：{total} 条</p>
+          <p>当前页码：第 {currentPage} 页</p>
+          <p>每页大小：{pageSize} 条</p>
+          <p>API地址：/api/v1/purchases/?page={currentPage}&size={pageSize}</p>
           <p>加载状态：{loading ? '加载中...' : '已完成'}</p>
         </div>
       </Card>

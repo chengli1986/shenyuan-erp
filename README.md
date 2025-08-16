@@ -41,9 +41,10 @@
 
 **核心功能**：
 - ✅ 简化版申购单创建 - 基础信息录入和提交
-- ✅ 申购单列表查看 - 分页显示和状态查询
+- ✅ 申购单列表查看 - 完整分页显示和状态查询
 - ✅ 申购单详情查看 - 弹窗展示完整信息
 - ✅ 项目名称显示 - 替代项目ID展示，提升用户体验
+- ✅ 分页功能完善 - 支持20/50/100条记录显示选择
 
 **技术特点**：
 - **简化版数据模型**：避免复杂的审批流程，专注核心功能
@@ -217,6 +218,71 @@ shenyuan-erp/
 - 停止服务：`./stop-erp.sh`
 
 ## 故障排除
+
+### 申购单分页功能问题 (2025-08-16)
+
+#### 问题场景
+用户设置每页显示20/50/100条记录时，页面仍然只显示10条记录，分页功能失效。
+
+#### 根本原因
+前后端API参数名不匹配：
+- 前端发送：`page_size=20`
+- 后端期望：`size=20`
+- 结果：后端使用默认值`size=10`
+
+#### 快速诊断方法
+```bash
+# 1. 验证后端API是否正确响应
+curl "http://localhost:8000/api/v1/purchases/?page=1&size=20" -H "Authorization: Bearer $TOKEN"
+
+# 2. 检查前端API调用参数
+grep -r "page_size" frontend/src/pages/Purchase/
+```
+
+#### 解决方案
+修正前端API调用中的参数名：
+```typescript
+// 错误：
+fetch(`/api/v1/purchases/?page=${page}&page_size=${size}`)
+
+// 正确：
+fetch(`/api/v1/purchases/?page=${page}&size=${size}`)
+```
+
+#### 预防措施
+- API开发时明确定义参数命名规范
+- 前后端开发同步确认接口文档
+- 使用TypeScript接口定义强制参数一致性
+
+### React应用无限加载问题 (2025-08-15)
+
+#### 问题场景
+用户登录成功后，React主应用出现无限加载，页面无法正常显示。
+
+#### 根本原因
+复杂组件导入和状态管理引起的初始化循环：
+- ConnectionProvider组件循环依赖
+- 过多的console.log影响性能
+- useEffect依赖数组配置错误
+
+#### 调试策略
+1. **渐进式简化**：创建最小可行版本逐步添加功能
+2. **组件分离测试**：单独测试问题组件
+3. **性能优化**：清理调试日志和无效依赖
+
+#### 解决方案
+```typescript
+// 简化认证逻辑
+isLoggedIn(): boolean {
+  const token = localStorage.getItem('access_token');
+  return token !== null && this.currentUser !== null;
+}
+
+// 使用useCallback优化性能
+const loadData = useCallback(async () => {
+  // 数据加载逻辑
+}, [dependencies]);
+```
 
 ### 权限系统集成问题 (2025-08-09)
 
@@ -662,28 +728,127 @@ Excel文件 → 解析器 → 数据库 → API → 前端显示
 
 ### 调试技巧排序
 
-1. **网络连接调试**：
-   - 使用`curl`测试API连通性
-   - 检查浏览器Network面板
+1. **API参数和连接调试**：
+   - 使用`curl`直接测试后端API和参数
+   - 检查浏览器Network面板的实际请求
+   - 对比前后端参数命名一致性
    - 确认CORS配置正确
 
-2. **服务状态检查**：
+2. **React性能和状态调试**：
+   - 创建最小可行版本排除复杂依赖
+   - 检查useEffect依赖数组配置
+   - 清理console.log等调试语句
+   - 使用useCallback优化组件性能
+
+3. **服务状态检查**：
    - `ps aux | grep uvicorn` - 检查后端进程
    - `ps aux | grep node` - 检查前端进程
    - `sudo netstat -tlnp` - 检查端口占用
 
-3. **日志分析**：
+4. **日志分析**：
    - 后端：`tail -f backend/backend.log`
    - 前端：`tail -f frontend/frontend.log`
    - 浏览器Console查看JavaScript错误
 
-4. **CORS调试**：
+5. **CORS调试**：
    ```bash
    # 测试CORS配置是否正确
    curl -I -X OPTIONS http://localhost:8000/health \
      -H "Origin: http://localhost:3000" \
      -H "Access-Control-Request-Method: GET"
    ```
+
+### API开发最佳实践
+
+**基于2025-08-16分页参数问题经验总结**
+
+#### 1. 前后端参数命名一致性
+```python
+# 后端API定义 (FastAPI)
+@router.get("/")
+async def get_items(
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1, le=100)  # 使用'size'而非'page_size'
+):
+    pass
+```
+
+```typescript
+// 前端API调用必须匹配
+const response = await fetch(`/api/v1/items/?page=${page}&size=${size}`);
+```
+
+#### 2. API参数验证流程
+```bash
+# 开发时验证API参数有效性
+curl "http://localhost:8000/api/v1/purchases/?page=1&size=20" -H "Authorization: Bearer $TOKEN"
+
+# 检查返回数据是否符合预期
+# {"total": 18, "items": [...], "page": 1, "size": 20}
+```
+
+#### 3. TypeScript类型定义强制一致性
+```typescript
+// 定义API参数接口
+interface PaginationParams {
+  page: number;
+  size: number;  // 确保与后端参数名一致
+}
+
+// 在API服务中使用
+const getPurchases = (params: PaginationParams) => {
+  return api.get(`/purchases/?page=${params.page}&size=${params.size}`);
+};
+```
+
+### React开发最佳实践
+
+**基于2025-08-15无限加载问题经验总结**
+
+#### 1. 组件性能优化
+```typescript
+// ✅ 使用useCallback防止不必要的重渲染
+const loadData = useCallback(async (page = 1, size = 10) => {
+  // 数据加载逻辑
+}, [currentPage, pageSize]);
+
+// ✅ 正确配置useEffect依赖
+useEffect(() => {
+  loadData();
+}, [loadData]);
+
+// ❌ 避免复杂的组件导入链
+import { ComplexProvider } from './contexts/ComplexContext';
+```
+
+#### 2. 调试和问题排查
+```typescript
+// ✅ 渐进式组件开发
+// 1. 创建最小可行版本 (AppMinimal.tsx)
+// 2. 逐步添加功能并测试
+// 3. 定位问题组件后针对性修复
+
+// ✅ 清理性能影响的代码
+// 移除多余的console.log
+// 简化状态管理逻辑
+// 避免在render中进行复杂计算
+```
+
+#### 3. 状态管理最佳实践
+```typescript
+// ✅ 认证状态简化
+isLoggedIn(): boolean {
+  const token = localStorage.getItem('access_token');
+  return token !== null && this.currentUser !== null;
+}
+
+// ✅ 避免状态更新冲突
+const handleUpdate = useCallback((id: string, updates: Partial<Item>) => {
+  setItems(items => items.map(item => 
+    item.id === id ? { ...item, ...updates } : item
+  ));
+}, []);
+```
 
 ### 权限系统集成开发流程
 
