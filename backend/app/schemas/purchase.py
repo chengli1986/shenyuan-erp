@@ -102,6 +102,7 @@ class SupplierInDB(SupplierBase):
 class PurchaseItemBase(BaseModel):
     """申购明细基础信息"""
     contract_item_id: Optional[int] = None  # 主材必须关联
+    system_category_id: Optional[int] = None  # 系统分类
     item_name: str
     specification: Optional[str] = None
     brand: Optional[str] = None
@@ -157,6 +158,9 @@ class PurchaseItemInDB(PurchaseItemBase):
     remaining_quantity: Decimal = Field(default=Decimal(0))
     status: str = "pending"
     
+    # 关联字段（动态添加）
+    system_category_name: Optional[str] = None
+    
     class Config:
         from_attributes = True
 
@@ -171,6 +175,7 @@ class PurchaseItemWithoutPrice(BaseModel):
     id: int
     request_id: int
     contract_item_id: Optional[int] = None
+    system_category_id: Optional[int] = None
     item_name: str
     specification: Optional[str] = None
     brand: Optional[str] = None
@@ -183,6 +188,9 @@ class PurchaseItemWithoutPrice(BaseModel):
     remaining_quantity: Decimal
     status: str
     remarks: Optional[str] = None
+    
+    # 关联字段（动态添加）
+    system_category_name: Optional[str] = None
     
     class Config:
         from_attributes = True

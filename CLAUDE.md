@@ -1500,6 +1500,295 @@
   - [ ] 异常消息统一且不泄露敏感信息
   - [ ] 权限检查在业务逻辑执行前完成
 
+  ## 申购单系统分类优化功能开发记录 (2025-08-17)
+
+  ### 功能需求与设计理念
+  **核心需求**：用户提出"关于所属系统，我感觉是否在申购明细里面比较好，也就是说在创建申购单的时候，就让创建者可以添加对应的系统，且要和合同清单挂钩，尤其是主材，辅材可以自行填写，而主材，一般你的物料的选择对应了其所在的系统，如果一个物料出现在多个系统，则可以让创建者进行选择"
+
+  **设计理念**：
+  - **物料级系统分类**：从申购单级别移动到申购明细级别，更精准的分类
+  - **智能主材识别**：主材自动关联合同清单对应系统，减少手动操作
+  - **辅材灵活性**：辅材允许手动选择系统分类，支持业务灵活性
+  - **多系统物料支持**：单个物料可能属于多个系统时提供选择机制
+
+  ### 技术架构实现
+
+  #### 1. 数据库模型扩展
+  **实现位置**：`backend/app/models/purchase.py`
+  ```python
+  class PurchaseRequestItem(Base):
+      # 新增系统分类字段
+      system_category_id = Column(Integer, ForeignKey("system_categories.id"), nullable=True)
+      
+      # 建立关联关系
+      system_category = relationship("SystemCategory", backref="purchase_items")
+  ```
+
+  **技术要点**：
+  - 外键关联确保数据完整性
+  - 可空设计支持辅材灵活分类
+  - 反向关系支持系统分类统计查询
+
+  #### 2. 智能系统分类API设计
+  **实现位置**：`backend/app/api/v1/purchases.py`
+  ```python
+  @router.get("/system-categories/by-project/{project_id}")
+  async def get_system_categories_by_project(project_id: int):
+      """获取项目相关的系统分类列表"""
+      
+  @router.get("/system-categories/by-material")
+  async def get_system_categories_by_material(
+      project_id: int, 
+      material_name: str
+  ):
+      """根据物料名称智能推荐系统分类"""
+  ```
+
+  **智能推荐逻辑**：
+  1. **合同清单查询**：查找项目中包含该物料的合同清单项
+  2. **系统分类聚合**：自动聚合相关系统分类
+  3. **多系统处理**：返回所有可能的系统分类供用户选择
+  4. **建议标记**：标记推荐的主要系统分类
+
+  #### 3. 业务服务层优化
+  **实现位置**：`backend/app/services/purchase_service.py`
+  ```python
+  # 主材创建时保存系统分类
+  item = PurchaseRequestItem(
+      request_id=purchase_request.id,
+      contract_item_id=contract_item.id,
+      system_category_id=item_data.system_category_id,  # 核心新增字段
+      item_name=contract_item.item_name,
+      # ... 其他字段
+  )
+  
+  # 辅材创建时也支持系统分类
+  item = PurchaseRequestItem(
+      request_id=purchase_request.id,
+      contract_item_id=None,
+      system_category_id=item_data.system_category_id,  # 辅材也支持分类
+      item_name=item_data.item_name,
+      # ... 其他字段
+  )
+  ```
+
+  #### 4. Pydantic Schema扩展
+  **实现位置**：`backend/app/schemas/purchase.py`
+  ```python
+  class PurchaseItemBase(BaseModel):
+      contract_item_id: Optional[int] = None
+      system_category_id: Optional[int] = None  # 新增系统分类字段
+      item_name: str
+      # ... 其他字段
+  
+  class PurchaseItemInDB(PurchaseItemBase):
+      # API响应时包含系统分类名称
+      system_category_name: Optional[str] = None
+  ```
+
+  ### 前端智能表单实现
+
+  #### 1. 智能系统选择组件
+  **实现位置**：`frontend/src/pages/Purchase/EnhancedPurchaseForm.tsx`
+  ```typescript
+  interface SystemCategory {
+    id: number;
+    category_name: string;
+    category_code?: string;
+    description?: string;
+    is_suggested?: boolean;  // 智能推荐标记
+    items_count?: number;    // 包含物料数量
+  }
+  
+  // 物料名称变化时智能加载系统分类
+  const handleMaterialNameChange = async (itemId, materialName) => {
+    if (projectId && materialName) {
+      const categories = await getSystemCategoriesByMaterial(projectId, materialName);
+      
+      // 自动选择建议的系统分类
+      const suggestedCategory = categories.find(cat => cat.is_suggested);
+      if (suggestedCategory && categories.length === 1) {
+        handleSystemCategoryChange(itemId, suggestedCategory.id);
+      }
+    }
+  };
+  ```
+
+  #### 2. 表单列配置优化
+  ```typescript
+  {
+    title: '所属系统',
+    dataIndex: 'system_category_id',
+    width: 140,
+    render: (value, record) => (
+      <Select
+        value={value}
+        onChange={(categoryId) => handleSystemCategoryChange(record.id, categoryId)}
+        placeholder="选择系统"
+        allowClear
+        showSearch
+        filterOption={(input, option) => 
+          option.children.toLowerCase().includes(input.toLowerCase())
+        }
+      >
+        {record.availableSystemCategories?.map(category => (
+          <Select.Option 
+            key={category.id} 
+            value={category.id}
+          >
+            {category.is_suggested ? '⭐ ' : ''}{category.category_name}
+          </Select.Option>
+        ))}
+      </Select>
+    )
+  }
+  ```
+
+  ### 重大技术问题解决
+
+  #### 问题1：前端编译错误 - API服务导入问题
+  **错误现象**：
+  ```
+  ERROR in ./src/pages/Purchase/EnhancedPurchaseForm.tsx 59:29-36
+  export 'api' (imported as 'api') was not found in '../../services/api'
+  ```
+  **根本原因**：API服务使用默认导出，但前端使用命名导入
+  **解决方案**：
+  ```typescript
+  // 修复前：错误的命名导入
+  import { api } from '../../services/api';
+  
+  // 修复后：正确的默认导入
+  import api from '../../services/api';
+  ```
+
+  #### 问题2：系统分类数据不保存到数据库
+  **问题现象**：前端选择系统分类后，申购单详情页面不显示系统分类信息
+  **诊断过程**：
+  1. 前端传递参数正确 ✓
+  2. 后端API接收参数正确 ✓
+  3. Pydantic Schema验证通过 ✓
+  4. **发现问题**：PurchaseService创建申购明细时未保存system_category_id
+
+  **解决方案**：
+  ```python
+  # 修复前：缺少system_category_id保存
+  item = PurchaseRequestItem(
+      request_id=purchase_request.id,
+      contract_item_id=contract_item.id,
+      # system_category_id=item_data.system_category_id,  # 缺少这行
+      item_name=contract_item.item_name,
+  )
+  
+  # 修复后：完整保存系统分类信息
+  item = PurchaseRequestItem(
+      request_id=purchase_request.id,
+      contract_item_id=contract_item.id,
+      system_category_id=item_data.system_category_id,  # 关键修复
+      item_name=contract_item.item_name,
+  )
+  ```
+
+  #### 问题3：申购详情API缺少系统分类名称
+  **问题现象**：API返回system_category_id但前端需要显示system_category_name
+  **解决方案**：动态关联查询
+  ```python
+  # backend/app/api/v1/purchases.py - get_purchase_request()
+  # 为申购明细添加系统分类名称
+  if 'items' in result and result['items']:
+      from app.models.contract import SystemCategory
+      for item in result['items']:
+          if item.get('system_category_id'):
+              category = db.query(SystemCategory).filter(
+                  SystemCategory.id == item['system_category_id']
+              ).first()
+              item['system_category_name'] = category.category_name if category else None
+          else:
+              item['system_category_name'] = None
+  ```
+
+  ### UI优化实现
+
+  #### 1. 申购详情页面系统分类显示
+  **实现位置**：`frontend/src/pages/Purchase/SimplePurchaseDetail.tsx`
+  ```typescript
+  {
+    title: '所属系统',
+    dataIndex: 'system_category_name',
+    width: 120,
+    render: (value: string) => value ? (
+      <Tag color="blue">{value}</Tag>  // 蓝色标签突出显示
+    ) : '-'
+  }
+  ```
+
+  #### 2. 申购列表页面优化
+  **实现位置**：`frontend/src/pages/Purchase/SimplePurchaseList.tsx`
+  ```typescript
+  // 移除系统分类列，保持列表简洁
+  // {
+  //   title: '所属系统',
+  //   dataIndex: 'system_category',
+  //   width: 120,
+  // },
+  ```
+
+  **优化理念**：
+  - **列表页简洁**：只显示核心信息，避免信息过载
+  - **详情页完整**：详情页显示完整的系统分类信息
+  - **视觉一致性**：使用蓝色Tag标签保持UI风格统一
+
+  ### 验证结果和成果
+
+  #### 功能验证完成
+  - ✅ **智能主材分类**：选择主材物料时自动推荐对应系统分类
+  - ✅ **辅材灵活分类**：辅材支持手动选择任意系统分类
+  - ✅ **多系统支持**：单个物料属于多个系统时提供选择列表
+  - ✅ **数据完整性**：系统分类信息正确保存到数据库
+  - ✅ **UI优化**：详情页显示系统分类，列表页保持简洁
+  - ✅ **前端编译**：修复导入错误，编译完全正常
+
+  #### 技术指标确认
+  ```bash
+  # 验证系统分类API响应
+  curl -s "http://localhost:8000/api/v1/purchases/system-categories/by-project/2" | jq '.total'
+  # 输出: 7 (7个系统分类)
+  
+  # 验证物料智能推荐
+  curl -s "http://localhost:8000/api/v1/purchases/system-categories/by-material?project_id=2&material_name=摄像机" | jq '.categories[0].is_suggested'
+  # 输出: true (智能推荐生效)
+  
+  # 验证申购详情系统分类显示
+  curl -s "http://localhost:8000/api/v1/purchases/22" | jq '.items[0].system_category_name'
+  # 输出: "视频监控系统" (系统分类正确显示)
+  ```
+
+  ### 核心经验总结
+
+  #### 1. 数据模型设计最佳实践
+  - **外键约束优先**：使用外键确保数据完整性
+  - **可空字段设计**：支持业务灵活性，允许渐进式数据完善
+  - **反向关系建立**：便于统计查询和数据分析
+  - **命名语义明确**：字段名称直接反映业务含义
+
+  #### 2. API设计模式总结
+  - **智能推荐模式**：基于历史数据和业务规则的自动推荐
+  - **分层查询策略**：项目级→物料级→系统级的层级查询
+  - **缓存友好设计**：支持前端缓存的API响应结构
+  - **扩展性考虑**：预留字段支持未来功能扩展
+
+  #### 3. 前端组件开发规范
+  - **API服务统一**：所有API调用使用统一服务，避免导入问题
+  - **状态管理清晰**：智能缓存 + 按需加载的状态管理策略
+  - **用户体验优先**：自动推荐 + 手动选择的混合交互模式
+  - **调试友好**：详细的console日志便于问题排查
+
+  #### 4. 调试方法论进阶
+  - **分层验证思维**：数据库→API→前端→UI的完整验证链
+  - **工具链组合**：curl + jq + React DevTools的高效调试组合
+  - **缓存问题意识**：前端缓存可能导致的数据不一致问题
+  - **编译错误优先**：解决编译错误比运行时错误更重要
+
   ## 申购单批量删除功能开发与调试记录 (2025-08-17)
 
   ### 功能需求
@@ -2200,6 +2489,11 @@
   - **用户账号规范**：建立用户名唯一性，避免重复账号冲突
   - **环境变量控制**：关键配置(如端口)使用环境变量管理
   - **服务监控意识**：开发调试工具辅助问题快速定位
+  - **智能推荐设计**：新功能开发时优先考虑基于历史数据的智能推荐
+  - **物料级分类意识**：业务设计从粗粒度向细粒度演进，提升管理精度
+  - **API导入规范**：前端统一使用默认导入避免编译错误，import api from './services/api'
+  - **外键关联优先**：数据库设计优先使用外键约束确保数据完整性
+  - **分层验证思维**：数据库→API→前端→UI的完整验证链
   - 使用./scripts/start-erp-dev.sh启动开发环境
   - 遇到问题先查看故障排除文档和学习指南
   - 新功能开发前先阅读网络访问原理理解前后端通信

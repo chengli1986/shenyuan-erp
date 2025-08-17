@@ -18,6 +18,7 @@ import {
 import { PlusOutlined, DeleteOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { createPurchaseRequest, getMaterialNamesByProject, getSpecificationsByMaterial } from '../../services/purchase';
+import api from '../../services/api';
 import { ItemType } from '../../types/purchase';
 import { ProjectService } from '../../services/project';
 import { Project } from '../../types/project';
@@ -25,10 +26,20 @@ import { Project } from '../../types/project';
 const { TextArea } = Input;
 const { Option } = Select;
 
+interface SystemCategory {
+  id: number;
+  category_name: string;
+  category_code?: string;
+  description?: string;
+  is_suggested?: boolean;
+  items_count?: number;
+}
+
 interface EnhancedPurchaseItem {
   id: string;
   item_type: ItemType;
   contract_item_id?: number; // 合同清单项ID（主材必须有）
+  system_category_id?: number; // 系统分类ID
   item_name: string;
   specification: string;
   brand_model: string;
@@ -49,6 +60,10 @@ interface EnhancedPurchaseItem {
     remaining_quantity: number;
     unit_price?: number;
   }[];
+  // 系统分类选择状态
+  availableSystemCategories?: SystemCategory[];
+  systemCategoryMessage?: string;
+  autoSelectedSystem?: SystemCategory;
 }
 
 const EnhancedPurchaseForm: React.FC = () => {
@@ -87,6 +102,30 @@ const EnhancedPurchaseForm: React.FC = () => {
     }
   }, [selectedProjectId]);
 
+  // 获取物料的系统分类信息
+  const getSystemCategoriesByMaterial = async (projectId: number, materialName: string) => {
+    try {
+      const response = await api.get('purchases/system-categories/by-material', {
+        params: { project_id: projectId, material_name: materialName }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('获取系统分类失败:', error);
+      throw error;
+    }
+  };
+
+  // 获取项目的所有系统分类
+  const getProjectSystemCategories = async (projectId: number) => {
+    try {
+      const response = await api.get(`purchases/system-categories/by-project/${projectId}`);
+      return response.data.categories;
+    } catch (error) {
+      console.error('获取项目系统分类失败:', error);
+      throw error;
+    }
+  };
+
   useEffect(() => {
     loadProjects();
   }, [loadProjects]);
@@ -105,7 +144,8 @@ const EnhancedPurchaseForm: React.FC = () => {
       brand_model: '',
       unit: '',
       quantity: 1,
-      remarks: ''
+      remarks: '',
+      system_category_id: undefined
     };
     setItems([...items, newItem]);
   };
@@ -120,6 +160,31 @@ const EnhancedPurchaseForm: React.FC = () => {
     setItems(items.map(item => 
       item.id === id ? { ...item, [field]: value } : item
     ));
+  };
+
+  // 处理系统分类选择
+  const handleSystemCategoryChange = (itemId: string, categoryId: number) => {
+    setItems(items => items.map(item => 
+      item.id === itemId ? { ...item, system_category_id: categoryId } : item
+    ));
+  };
+
+  // 处理辅材的系统分类选择（需要加载所有可选系统）
+  const handleAuxiliarySystemCategory = async (itemId: string) => {
+    if (!selectedProjectId) return;
+
+    try {
+      const categories = await getProjectSystemCategories(selectedProjectId);
+      setItems(items => items.map(item => 
+        item.id === itemId ? { 
+          ...item, 
+          availableSystemCategories: categories,
+          systemCategoryMessage: '请选择适合的系统分类'
+        } : item
+      ));
+    } catch (error) {
+      message.error('获取系统分类失败');
+    }
   };
 
   // 物料名称选择变化 - 触发规格型号联动查询
@@ -137,14 +202,22 @@ const EnhancedPurchaseForm: React.FC = () => {
           contract_item_id: undefined,
           max_quantity: undefined,
           remaining_quantity: undefined,
-          unit_price: undefined
+          unit_price: undefined,
+          system_category_id: undefined,
+          availableSystemCategories: [],
+          systemCategoryMessage: undefined,
+          autoSelectedSystem: undefined
         } : item
       ));
       return;
     }
 
     try {
-      const response = await getSpecificationsByMaterial(selectedProjectId!, materialName);
+      // 并行获取规格信息和系统分类信息
+      const [specResponse, systemResponse] = await Promise.all([
+        getSpecificationsByMaterial(selectedProjectId!, materialName),
+        getSystemCategoriesByMaterial(selectedProjectId!, materialName)
+      ]);
       
       // 批量更新item状态
       setItems(items => items.map(item => {
@@ -152,19 +225,24 @@ const EnhancedPurchaseForm: React.FC = () => {
           const updatedItem: EnhancedPurchaseItem = {
             ...item,
             item_name: materialName,
-            availableSpecifications: response.specifications,
+            availableSpecifications: specResponse.specifications,
             specification: '',
             brand_model: '',
             unit: '',
             contract_item_id: undefined,
             max_quantity: undefined,
             remaining_quantity: undefined,
-            unit_price: undefined
+            unit_price: undefined,
+            system_category_id: undefined,
+            // 系统分类信息
+            systemCategoryMessage: systemResponse.message,
+            availableSystemCategories: systemResponse.available_systems || [],
+            autoSelectedSystem: systemResponse.selected_system
           };
           
           // 如果只有一个规格选项，自动选择
-          if (response.specifications.length === 1) {
-            const spec = response.specifications[0];
+          if (specResponse.specifications.length === 1) {
+            const spec = specResponse.specifications[0];
             updatedItem.contract_item_id = spec.contract_item_id;
             updatedItem.specification = spec.specification;
             updatedItem.brand_model = spec.brand_model;
@@ -178,6 +256,12 @@ const EnhancedPurchaseForm: React.FC = () => {
               updatedItem.quantity = Math.max(1, spec.remaining_quantity);
               message.warning(`申购数量已调整为最大可申购数量 ${spec.remaining_quantity}`);
             }
+          }
+          
+          // 如果系统分类自动选择，设置system_category_id
+          if (systemResponse.auto_selected && systemResponse.selected_system) {
+            updatedItem.system_category_id = systemResponse.selected_system.id;
+            message.success(`已自动选择系统分类: ${systemResponse.selected_system.category_name}`);
           }
           
           return updatedItem;
@@ -291,6 +375,7 @@ const EnhancedPurchaseForm: React.FC = () => {
         remarks: values.remarks,
         items: items.map(item => ({
           contract_item_id: item.contract_item_id,
+          system_category_id: item.system_category_id,
           item_name: item.item_name,
           specification: item.specification,
           brand: item.brand_model, // 后端使用brand字段
@@ -439,6 +524,76 @@ const EnhancedPurchaseForm: React.FC = () => {
           onChange={(e) => updateItem(record.id, 'brand_model', e.target.value)}
         />
       )
+    },
+    {
+      title: (
+        <span>
+          所属系统
+          <Tooltip title="主材会根据合同清单自动选择系统，辅材可手动选择">
+            <InfoCircleOutlined style={{ marginLeft: 4, color: '#1890ff' }} />
+          </Tooltip>
+        </span>
+      ),
+      dataIndex: 'system_category_id',
+      width: 150,
+      render: (_: any, record: EnhancedPurchaseItem) => {
+        // 显示系统分类选择器
+        if (record.autoSelectedSystem) {
+          // 自动选择的系统（主材）
+          return (
+            <div>
+              <div style={{ color: '#52c41a', fontSize: '12px' }}>
+                已自动选择
+              </div>
+              <div>{record.autoSelectedSystem.category_name}</div>
+            </div>
+          );
+        } else if (record.availableSystemCategories && record.availableSystemCategories.length > 0) {
+          // 有可选系统的情况
+          return (
+            <div>
+              {record.systemCategoryMessage && (
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: 4 }}>
+                  {record.systemCategoryMessage}
+                </div>
+              )}
+              <Select
+                value={record.system_category_id}
+                placeholder="选择系统"
+                style={{ width: '100%' }}
+                onChange={(value) => handleSystemCategoryChange(record.id, value)}
+                allowClear
+              >
+                {record.availableSystemCategories.map(cat => (
+                  <Option key={cat.id} value={cat.id}>
+                    <div>
+                      <div>{cat.category_name}</div>
+                      {cat.is_suggested && (
+                        <div style={{ fontSize: '10px', color: '#1890ff' }}>
+                          建议选择 ({cat.items_count}个物料)
+                        </div>
+                      )}
+                    </div>
+                  </Option>
+                ))}
+              </Select>
+            </div>
+          );
+        } else if (record.item_type === ItemType.AUXILIARY_MATERIAL && record.item_name) {
+          // 辅材且需要加载系统分类
+          return (
+            <Button 
+              size="small" 
+              onClick={() => handleAuxiliarySystemCategory(record.id)}
+              style={{ width: '100%' }}
+            >
+              选择系统
+            </Button>
+          );
+        } else {
+          return <span style={{ color: '#ccc' }}>-</span>;
+        }
+      }
     },
     {
       title: '单位',

@@ -469,6 +469,14 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
       render: (value: string) => value || '-'
     },
     {
+      title: '所属系统',
+      dataIndex: 'system_category_name',
+      width: 120,
+      render: (value: string) => value ? (
+        <Tag color="blue">{value}</Tag>
+      ) : '-'
+    },
+    {
       title: '单位',
       dataIndex: 'unit',
       width: 60

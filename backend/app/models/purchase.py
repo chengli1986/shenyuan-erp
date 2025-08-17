@@ -104,6 +104,9 @@ class PurchaseRequestItem(Base):
     # 关联合同清单项（主材必须关联）
     contract_item_id = Column(Integer, ForeignKey("contract_items.id"), nullable=True)
     
+    # 系统分类关联（支持物料级别的系统分类）
+    system_category_id = Column(Integer, ForeignKey("system_categories.id"), nullable=True)
+    
     # 物料信息
     item_name = Column(String(200), nullable=False)
     specification = Column(Text)  # 规格参数
@@ -138,6 +141,7 @@ class PurchaseRequestItem(Base):
     # 关系
     purchase_request = relationship("PurchaseRequest", back_populates="items")
     contract_item = relationship("ContractItem", backref="purchase_items")
+    system_category = relationship("SystemCategory", backref="purchase_items")
     supplier = relationship("Supplier", backref="purchase_items")
     inbound_batches = relationship("InboundBatch", back_populates="purchase_item")
 

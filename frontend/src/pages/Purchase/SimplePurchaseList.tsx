@@ -238,13 +238,6 @@ const SimplePurchaseList: React.FC = () => {
       )
     },
     {
-      title: '所属系统',
-      dataIndex: 'system_category',
-      key: 'system_category',
-      width: 120,
-      render: (value: string) => value || '-'
-    },
-    {
       title: '总金额',
       dataIndex: 'total_amount',
       key: 'total_amount',

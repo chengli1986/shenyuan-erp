@@ -86,6 +86,7 @@ class PurchaseService:
                 item = PurchaseRequestItem(
                     request_id=purchase_request.id,
                     contract_item_id=contract_item.id,
+                    system_category_id=item_data.system_category_id,
                     item_name=contract_item.item_name,
                     specification=contract_item.specification or item_data.specification,
                     brand=contract_item.brand or item_data.brand,
@@ -100,6 +101,7 @@ class PurchaseService:
                 item = PurchaseRequestItem(
                     request_id=purchase_request.id,
                     contract_item_id=None,
+                    system_category_id=item_data.system_category_id,
                     item_name=item_data.item_name,
                     specification=item_data.specification,
                     brand=item_data.brand,

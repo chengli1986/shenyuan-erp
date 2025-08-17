@@ -342,12 +342,24 @@ async def get_purchase_request(
         result = PurchaseRequestWithoutPrice.from_orm(request).dict()
         result['project_name'] = project_name
         result['requester_name'] = requester_name
-        return result
     else:
         result = PurchaseRequestWithItems.from_orm(request).dict()
         result['project_name'] = project_name
         result['requester_name'] = requester_name
-        return result
+    
+    # 为申购明细添加系统分类名称
+    if 'items' in result and result['items']:
+        from app.models.contract import SystemCategory
+        for item in result['items']:
+            if item.get('system_category_id'):
+                category = db.query(SystemCategory).filter(
+                    SystemCategory.id == item['system_category_id']
+                ).first()
+                item['system_category_name'] = category.category_name if category else None
+            else:
+                item['system_category_name'] = None
+    
+    return result
 
 
 @router.post("/", response_model=PurchaseRequestInDB)
@@ -1090,3 +1102,166 @@ async def create_auxiliary_template(
         created_by=current_user.id
     )
     return template
+
+
+# ========== 系统分类相关API ==========
+
+@router.get("/system-categories/by-project/{project_id}")
+async def get_system_categories_by_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    获取项目的所有系统分类
+    用于申购表单的系统选择下拉框
+    """
+    from app.models.contract import SystemCategory, ContractFileVersion
+    
+    # 获取项目当前生效的版本
+    current_version = db.query(ContractFileVersion).filter(
+        and_(
+            ContractFileVersion.project_id == project_id,
+            ContractFileVersion.is_current == True
+        )
+    ).first()
+    
+    if not current_version:
+        raise HTTPException(status_code=404, detail="项目未找到有效的合同清单版本")
+    
+    # 获取该版本的所有系统分类
+    categories = db.query(SystemCategory).filter(
+        SystemCategory.version_id == current_version.id
+    ).all()
+    
+    return {
+        "project_id": project_id,
+        "version_id": current_version.id,
+        "categories": [
+            {
+                "id": cat.id,
+                "category_name": cat.category_name,
+                "category_code": cat.category_code,
+                "description": cat.description,
+                "total_items_count": cat.total_items_count
+            }
+            for cat in categories
+        ]
+    }
+
+
+@router.get("/system-categories/by-material")
+async def get_system_categories_by_material(
+    project_id: int = Query(..., description="项目ID"),
+    material_name: str = Query(..., description="物料名称"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    根据物料名称获取可能的系统分类
+    处理一个物料出现在多个系统的情况
+    """
+    from app.models.contract import SystemCategory, ContractFileVersion
+    
+    # 获取项目当前生效的版本
+    current_version = db.query(ContractFileVersion).filter(
+        and_(
+            ContractFileVersion.project_id == project_id,
+            ContractFileVersion.is_current == True
+        )
+    ).first()
+    
+    if not current_version:
+        raise HTTPException(status_code=404, detail="项目未找到有效的合同清单版本")
+    
+    # 查找该物料名称在合同清单中的所有记录
+    contract_items = db.query(ContractItem).filter(
+        and_(
+            ContractItem.version_id == current_version.id,
+            ContractItem.item_name == material_name,
+            ContractItem.is_active == True
+        )
+    ).all()
+    
+    if not contract_items:
+        # 如果不是合同清单中的物料，返回所有可选系统（辅材情况）
+        all_categories = db.query(SystemCategory).filter(
+            SystemCategory.version_id == current_version.id
+        ).all()
+        
+        return {
+            "material_name": material_name,
+            "is_contract_item": False,
+            "message": "该物料不在合同清单中，可选择任意系统分类",
+            "available_systems": [
+                {
+                    "id": cat.id,
+                    "category_name": cat.category_name,
+                    "category_code": cat.category_code,
+                    "is_suggested": False
+                }
+                for cat in all_categories
+            ]
+        }
+    
+    # 获取该物料所属的系统分类
+    category_ids = list(set([item.category_id for item in contract_items if item.category_id]))
+    
+    if not category_ids:
+        # 物料存在但没有分类信息
+        all_categories = db.query(SystemCategory).filter(
+            SystemCategory.version_id == current_version.id
+        ).all()
+        
+        return {
+            "material_name": material_name,
+            "is_contract_item": True,
+            "message": "该物料在合同清单中但未分配系统分类",
+            "available_systems": [
+                {
+                    "id": cat.id,
+                    "category_name": cat.category_name,
+                    "category_code": cat.category_code,
+                    "is_suggested": False
+                }
+                for cat in all_categories
+            ]
+        }
+    
+    # 获取物料所属的系统分类信息
+    categories = db.query(SystemCategory).filter(
+        SystemCategory.id.in_(category_ids)
+    ).all()
+    
+    # 如果物料属于多个系统，提供选择
+    if len(categories) > 1:
+        return {
+            "material_name": material_name,
+            "is_contract_item": True,
+            "message": f"该物料出现在 {len(categories)} 个系统中，请选择适用的系统",
+            "available_systems": [
+                {
+                    "id": cat.id,
+                    "category_name": cat.category_name,
+                    "category_code": cat.category_code,
+                    "is_suggested": True,
+                    "items_count": len([item for item in contract_items if item.category_id == cat.id])
+                }
+                for cat in categories
+            ]
+        }
+    
+    # 物料只属于一个系统，自动选择
+    category = categories[0]
+    return {
+        "material_name": material_name,
+        "is_contract_item": True,
+        "auto_selected": True,
+        "message": f"该物料属于 {category.category_name}",
+        "selected_system": {
+            "id": category.id,
+            "category_name": category.category_name,
+            "category_code": category.category_code,
+            "items_count": len([item for item in contract_items if item.category_id == category.id])
+        }
+    }
