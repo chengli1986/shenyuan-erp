@@ -237,12 +237,24 @@ class PurchaseRequestWithItems(PurchaseRequestInDB):
     project_name: Optional[str] = None
 
 
-class PurchaseRequestWithoutPrice(PurchaseRequestInDB):
+class PurchaseRequestWithoutPrice(BaseModel):
     """不包含价格的申购单（项目经理视图）"""
+    id: int
+    request_code: str
+    project_id: int
+    request_date: datetime
+    requester_id: int
+    status: PurchaseStatus
+    approval_notes: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
     items: List[PurchaseItemWithoutPrice]
     requester_name: Optional[str] = None
     project_name: Optional[str] = None
-    total_amount: None = None  # 隐藏总金额
+    # 不包含 total_amount 字段，完全隐藏价格信息
+    
+    class Config:
+        from_attributes = True
 
 
 # ========== 审批相关 ==========

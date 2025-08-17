@@ -235,9 +235,20 @@ async def get_purchase_requests(
     """
     query = db.query(PurchaseRequest)
     
-    # 权限过滤
-    if current_user.role == "project_manager":
-        query = query.filter(PurchaseRequest.requester_id == current_user.id)
+    # 权限过滤 - 项目级权限控制
+    if current_user.role.value == "project_manager":
+        # 项目经理只能看到自己负责的项目的申购单
+        # 通过项目经理姓名匹配来确定负责的项目
+        managed_projects = db.query(Project.id).filter(
+            Project.project_manager == current_user.name
+        ).all()
+        
+        if managed_projects:
+            managed_project_ids = [p.id for p in managed_projects]
+            query = query.filter(PurchaseRequest.project_id.in_(managed_project_ids))
+        else:
+            # 如果没有负责的项目，返回空结果
+            query = query.filter(PurchaseRequest.id == -1)  # 永远不匹配
     
     # 条件过滤
     if project_id:
@@ -269,10 +280,9 @@ async def get_purchase_requests(
         requester = db.query(User).filter(User.id == item.requester_id).first()
         requester_name = requester.name if requester else "系统管理员"
         
-        if current_user.role == "project_manager":
+        if current_user.role.value == "project_manager":
             # 项目经理看不到价格信息
             item_dict = PurchaseRequestWithoutPrice.from_orm(item).dict()
-            item_dict['total_amount'] = None  # 隐藏总金额
             item_dict['project_name'] = project_name
             item_dict['requester_name'] = requester_name
             result_items.append(item_dict)
@@ -302,9 +312,20 @@ async def get_purchase_request(
     if not request:
         raise HTTPException(status_code=404, detail="申购单不存在")
     
-    # 权限检查
-    if current_user.role == "project_manager" and request.requester_id != current_user.id:
-        raise HTTPException(status_code=403, detail="无权查看此申购单")
+    # 权限检查 - 项目级权限控制
+    if current_user.role.value == "project_manager":
+        # 项目经理只能查看自己负责项目的申购单
+        managed_projects = db.query(Project.id).filter(
+            Project.project_manager == current_user.name
+        ).all()
+        
+        if managed_projects:
+            managed_project_ids = [p.id for p in managed_projects]
+            if request.project_id not in managed_project_ids:
+                raise HTTPException(status_code=403, detail="无权查看此申购单")
+        else:
+            # 如果没有负责的项目，拒绝访问
+            raise HTTPException(status_code=403, detail="无权查看此申购单")
     
     # 获取项目名称
     project = db.query(Project).filter(Project.id == request.project_id).first()
@@ -315,7 +336,7 @@ async def get_purchase_request(
     requester_name = requester.name if requester else "系统管理员"
     
     # 根据角色返回不同视图
-    if current_user.role == "project_manager":
+    if current_user.role.value == "project_manager":
         result = PurchaseRequestWithoutPrice.from_orm(request).dict()
         result['project_name'] = project_name
         result['requester_name'] = requester_name
@@ -338,7 +359,7 @@ async def create_purchase_request(
     - 主材必须关联合同清单项并进行数量校验
     - 辅材可以自由添加
     """
-    if current_user.role not in ["project_manager", "purchaser", "admin"]:
+    if current_user.role.value not in ["project_manager", "purchaser", "admin"]:
         raise HTTPException(status_code=403, detail="只有项目经理和采购员可以创建申购单")
     
     # 验证项目存在
@@ -439,7 +460,7 @@ async def quote_purchase_request(
     - 填写供应商信息和价格
     - 预计到货时间
     """
-    if current_user.role not in ["purchaser", "admin"]:
+    if current_user.role.value not in ["purchaser", "admin"]:
         raise HTTPException(status_code=403, detail="只有采购员可以进行询价")
     
     request = db.query(PurchaseRequest).filter(PurchaseRequest.id == request_id).first()
@@ -502,10 +523,10 @@ async def approve_purchase_request(
         raise HTTPException(status_code=404, detail="申购单不存在")
     
     # 确定审批级别
-    if current_user.role == "dept_manager":
+    if current_user.role.value == "dept_manager":
         approval_level = 1
         next_status = PurchaseStatus.DEPT_APPROVED if approval_data.approval_status == ApprovalStatus.APPROVED else PurchaseStatus.REJECTED
-    elif current_user.role in ["general_manager", "admin"]:
+    elif current_user.role.value in ["general_manager", "admin"]:
         approval_level = 2
         next_status = PurchaseStatus.FINAL_APPROVED if approval_data.approval_status == ApprovalStatus.APPROVED else PurchaseStatus.REJECTED
     else:
@@ -611,7 +632,7 @@ async def create_supplier(
     current_user: User = Depends(deps.get_current_user)
 ):
     """创建供应商（采购员）"""
-    if current_user.role not in ["purchaser", "admin"]:
+    if current_user.role.value not in ["purchaser", "admin"]:
         raise HTTPException(status_code=403, detail="只有采购员可以创建供应商")
     
     # 检查供应商名称是否已存在
@@ -645,7 +666,7 @@ async def update_supplier(
     current_user: User = Depends(deps.get_current_user)
 ):
     """更新供应商信息"""
-    if current_user.role not in ["purchaser", "admin"]:
+    if current_user.role.value not in ["purchaser", "admin"]:
         raise HTTPException(status_code=403, detail="只有采购员可以更新供应商")
     
     supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
@@ -685,7 +706,7 @@ async def create_auxiliary_template(
     current_user: User = Depends(deps.get_current_user)
 ):
     """创建辅材模板"""
-    if current_user.role not in ["purchaser", "admin"]:
+    if current_user.role.value not in ["purchaser", "admin"]:
         raise HTTPException(status_code=403, detail="只有采购员可以创建辅材模板")
     
     service = PurchaseService(db)
