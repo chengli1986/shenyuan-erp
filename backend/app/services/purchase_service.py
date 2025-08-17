@@ -47,6 +47,7 @@ class PurchaseService:
             project_id=request_data.project_id,
             requester_id=requester_id,
             required_date=request_data.required_date,
+            system_category=request_data.system_category,  # 添加所属系统字段
             status=PurchaseStatus.DRAFT
         )
         self.db.add(purchase_request)

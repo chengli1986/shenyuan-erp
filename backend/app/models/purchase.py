@@ -15,9 +15,9 @@ import enum
 class PurchaseStatus(enum.Enum):
     """申购单状态枚举"""
     DRAFT = "draft"                    # 草稿
-    SUBMITTED = "submitted"             # 已提交
-    PRICE_QUOTED = "price_quoted"       # 已询价
-    DEPT_APPROVED = "dept_approved"     # 部门已审批
+    SUBMITTED = "submitted"             # 已提交（待采购员询价）
+    PRICE_QUOTED = "price_quoted"       # 已询价（待部门主管审批）
+    DEPT_APPROVED = "dept_approved"     # 部门已审批（待总经理审批）
     FINAL_APPROVED = "final_approved"   # 最终审批通过
     REJECTED = "rejected"               # 已拒绝
     CANCELLED = "cancelled"             # 已取消
@@ -37,6 +37,24 @@ class ApprovalStatus(enum.Enum):
     REJECTED = "rejected"
 
 
+class WorkflowStep(enum.Enum):
+    """工作流步骤枚举"""
+    PROJECT_MANAGER = "project_manager"    # 项目经理发起
+    PURCHASER = "purchaser"               # 采购员询价
+    DEPT_MANAGER = "dept_manager"         # 部门主管审批
+    GENERAL_MANAGER = "general_manager"   # 总经理审批
+    COMPLETED = "completed"               # 流程完成
+
+
+class PaymentMethod(enum.Enum):
+    """付款方式枚举"""
+    PREPAYMENT = "prepayment"       # 预付款
+    DELIVERY_PAYMENT = "delivery"   # 货到付款
+    MONTHLY_SETTLEMENT = "monthly"  # 月结
+    CASH = "cash"                   # 现金
+    BANK_TRANSFER = "transfer"      # 银行转账
+
+
 class PurchaseRequest(Base):
     """申购单主表"""
     __tablename__ = "purchase_requests"
@@ -49,10 +67,19 @@ class PurchaseRequest(Base):
     request_date = Column(DateTime, server_default=func.now(), nullable=False)
     requester_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # 申购人
     required_date = Column(DateTime)  # 需求日期
+    system_category = Column(String(100))  # 所属系统（如：视频监控系统、门禁系统等）
     
     # 状态和金额
     status = Column(Enum(PurchaseStatus), default=PurchaseStatus.DRAFT, nullable=False)
     total_amount = Column(DECIMAL(15, 2), default=0)  # 总金额
+    
+    # 工作流控制 - 暂时使用String类型避免枚举兼容性问题
+    current_step = Column(String(50), default="project_manager", nullable=False)
+    current_approver_id = Column(Integer, ForeignKey("users.id"))  # 当前审批人
+    
+    # 采购信息（采购员填写）
+    payment_method = Column(Enum(PaymentMethod))  # 付款方式
+    estimated_delivery_date = Column(DateTime)  # 预计到货时间
     
     # 审批信息
     approval_notes = Column(Text)  # 审批意见
@@ -138,6 +165,34 @@ class PurchaseApproval(Base):
     # 关系
     purchase_request = relationship("PurchaseRequest", back_populates="approvals")
     approver = relationship("User", backref="purchase_approvals")
+
+
+class PurchaseWorkflowLog(Base):
+    """申购单工作流操作记录表"""
+    __tablename__ = "purchase_workflow_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    request_id = Column(Integer, ForeignKey("purchase_requests.id"), nullable=False)
+    
+    # 操作信息
+    from_step = Column(Enum(WorkflowStep))  # 来源步骤
+    to_step = Column(Enum(WorkflowStep), nullable=False)  # 目标步骤
+    operation = Column(String(50), nullable=False)  # 操作类型: submit, approve, reject, return
+    
+    # 操作人信息
+    operator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    operator_role = Column(String(50), nullable=False)
+    
+    # 操作内容
+    operation_notes = Column(Text)  # 操作说明/意见
+    operation_data = Column(JSON)  # 操作时的额外数据（如价格信息等）
+    
+    # 时间戳
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # 关系
+    purchase_request = relationship("PurchaseRequest", backref="workflow_logs")
+    operator = relationship("User", backref="workflow_operations")
 
 
 class Supplier(Base):

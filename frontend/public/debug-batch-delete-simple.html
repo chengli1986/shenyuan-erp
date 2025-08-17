@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>简化批量删除测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        button { margin: 10px; padding: 10px 20px; font-size: 16px; }
+        .result { margin: 10px 0; padding: 10px; border: 1px solid #ddd; }
+        .success { background-color: #d4edda; }
+        .error { background-color: #f8d7da; }
+        pre { background: #f5f5f5; padding: 10px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>简化批量删除测试</h1>
+    
+    <div>
+        <button onclick="loginAdmin()">1. 登录管理员</button>
+        <div id="loginResult"></div>
+    </div>
+    
+    <div>
+        <button onclick="testAPI()">2. 测试统一API服务</button>
+        <div id="apiResult"></div>
+    </div>
+    
+    <div>
+        <button onclick="testBatchDelete()">3. 测试批量删除</button>
+        <div id="deleteResult"></div>
+    </div>
+
+    <script>
+        let token = null;
+
+        async function loginAdmin() {
+            const resultDiv = document.getElementById('loginResult');
+            try {
+                const formData = new FormData();
+                formData.append('username', 'admin');
+                formData.append('password', 'admin123');
+
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    token = data.access_token;
+                    resultDiv.innerHTML = `<div class="result success">✅ 登录成功: ${data.user.name}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="result error">❌ 登录失败</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">❌ 登录错误: ${error}</div>`;
+            }
+        }
+
+        async function testAPI() {
+            const resultDiv = document.getElementById('apiResult');
+            if (!token) {
+                resultDiv.innerHTML = '<div class="result error">❌ 请先登录</div>';
+                return;
+            }
+
+            try {
+                // 模拟前端统一API服务调用
+                const headers = {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                };
+
+                console.log('测试Headers:', headers);
+
+                const response = await fetch('/api/v1/purchases/?page=1&size=3', {
+                    headers: headers
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            ✅ API调用成功<br>
+                            总数: ${data.total}<br>
+                            返回: ${data.items.length} 条记录
+                        </div>
+                        <pre>${JSON.stringify(data.items.map(item => ({id: item.id, code: item.request_code, status: item.status})), null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="result error">❌ API调用失败: ${response.status}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">❌ API错误: ${error}</div>`;
+            }
+        }
+
+        async function testBatchDelete() {
+            const resultDiv = document.getElementById('deleteResult');
+            if (!token) {
+                resultDiv.innerHTML = '<div class="result error">❌ 请先登录</div>';
+                return;
+            }
+
+            try {
+                // 先获取可删除的申购单
+                const listResponse = await fetch('/api/v1/purchases/?page=1&size=5', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!listResponse.ok) {
+                    resultDiv.innerHTML = `<div class="result error">❌ 获取申购单列表失败</div>`;
+                    return;
+                }
+
+                const listData = await listResponse.json();
+                const draftItems = listData.items.filter(item => item.status === 'draft');
+                
+                if (draftItems.length < 2) {
+                    resultDiv.innerHTML = `<div class="result error">❌ 草稿申购单不足2个，当前: ${draftItems.length}</div>`;
+                    return;
+                }
+
+                // 选择前2个草稿申购单进行删除测试
+                const idsToDelete = [draftItems[0].id, draftItems[1].id];
+                
+                console.log('准备删除的IDs:', idsToDelete);
+                console.log('删除前申购单总数:', listData.total);
+
+                // 执行批量删除
+                const deleteResponse = await fetch('/api/v1/purchases/batch-delete', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(idsToDelete)
+                });
+
+                console.log('删除响应状态:', deleteResponse.status);
+                const deleteResult = await deleteResponse.json();
+                console.log('删除响应数据:', deleteResult);
+
+                if (deleteResponse.ok) {
+                    // 再次获取列表确认删除效果
+                    const verifyResponse = await fetch('/api/v1/purchases/?page=1&size=5', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    const verifyData = await verifyResponse.json();
+                    console.log('删除后申购单总数:', verifyData.total);
+
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            ✅ 批量删除成功<br>
+                            删除ID: ${idsToDelete.join(', ')}<br>
+                            删除数量: ${deleteResult.deleted_count}<br>
+                            删除前总数: ${listData.total}<br>
+                            删除后总数: ${verifyData.total}
+                        </div>
+                        <pre>${JSON.stringify(deleteResult, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            ❌ 批量删除失败<br>
+                            状态码: ${deleteResponse.status}<br>
+                            错误: ${deleteResult.detail || JSON.stringify(deleteResult)}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('批量删除测试错误:', error);
+                resultDiv.innerHTML = `<div class="result error">❌ 批量删除测试错误: ${error}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

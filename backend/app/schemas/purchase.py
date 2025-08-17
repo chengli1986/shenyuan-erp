@@ -34,6 +34,24 @@ class ApprovalStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class WorkflowStep(str, Enum):
+    """工作流步骤"""
+    PROJECT_MANAGER = "project_manager"
+    PURCHASER = "purchaser"
+    DEPT_MANAGER = "dept_manager"
+    GENERAL_MANAGER = "general_manager"
+    COMPLETED = "completed"
+
+
+class PaymentMethod(str, Enum):
+    """付款方式"""
+    PREPAYMENT = "prepayment"
+    DELIVERY_PAYMENT = "delivery"
+    MONTHLY_SETTLEMENT = "monthly"
+    CASH = "cash"
+    BANK_TRANSFER = "transfer"
+
+
 # ========== 供应商相关 ==========
 
 class SupplierBase(BaseModel):
@@ -176,6 +194,7 @@ class PurchaseRequestBase(BaseModel):
     """申购单基础信息"""
     project_id: int
     required_date: Optional[datetime] = None
+    system_category: Optional[str] = None  # 所属系统
     remarks: Optional[str] = None
 
 
@@ -214,6 +233,21 @@ class PurchaseRequestApprove(BaseModel):
     approval_notes: Optional[str] = None
 
 
+class PurchaseRequestPriceQuote(BaseModel):
+    """采购员询价"""
+    payment_method: PaymentMethod
+    estimated_delivery_date: Optional[datetime] = None
+    items: List[PurchaseItemPriceQuote]
+    quote_notes: Optional[str] = None
+
+
+class PurchaseWorkflowOperation(BaseModel):
+    """工作流操作"""
+    operation: str  # submit, approve, reject, return
+    notes: Optional[str] = None
+    operation_data: Optional[Dict[str, Any]] = None
+
+
 class PurchaseRequestInDB(PurchaseRequestBase):
     """数据库中的申购单"""
     id: int
@@ -222,6 +256,16 @@ class PurchaseRequestInDB(PurchaseRequestBase):
     requester_id: int
     status: PurchaseStatus
     total_amount: Optional[Decimal] = None
+    
+    # 工作流字段
+    current_step: str  # 暂时使用字符串类型
+    current_approver_id: Optional[int] = None
+    
+    # 采购信息
+    payment_method: Optional[PaymentMethod] = None
+    estimated_delivery_date: Optional[datetime] = None
+    
+    # 审批信息
     approval_notes: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -244,14 +288,38 @@ class PurchaseRequestWithoutPrice(BaseModel):
     project_id: int
     request_date: datetime
     requester_id: int
+    required_date: Optional[datetime] = None
+    system_category: Optional[str] = None
     status: PurchaseStatus
+    
+    # 工作流字段（项目经理需要看到）
+    current_step: str  # 暂时使用字符串类型
+    current_approver_id: Optional[int] = None
+    
     approval_notes: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
-    items: List[PurchaseItemWithoutPrice]
+    items: List[PurchaseItemWithoutPrice] = []
     requester_name: Optional[str] = None
     project_name: Optional[str] = None
-    # 不包含 total_amount 字段，完全隐藏价格信息
+    # 不包含 total_amount, payment_method, estimated_delivery_date 等价格和采购信息
+    
+    class Config:
+        from_attributes = True
+
+
+class PurchaseWorkflowLog(BaseModel):
+    """工作流操作记录"""
+    id: int
+    request_id: int
+    from_step: Optional[WorkflowStep] = None
+    to_step: WorkflowStep
+    operation: str
+    operator_id: int
+    operator_role: str
+    operation_notes: Optional[str] = None
+    operation_data: Optional[Dict[str, Any]] = None
+    created_at: datetime
     
     class Config:
         from_attributes = True

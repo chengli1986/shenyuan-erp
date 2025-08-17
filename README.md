@@ -45,9 +45,14 @@
 - ✅ 申购单详情查看 - 弹窗展示完整信息
 - ✅ 项目名称显示 - 替代项目ID展示，提升用户体验
 - ✅ 分页功能完善 - 支持20/50/100条记录显示选择
+- ✅ **单个删除功能** - 支持草稿状态申购单的删除
+- ✅ **批量删除功能** - 支持多选删除，提升批量操作效率
+- ✅ **项目级权限隔离** - 项目经理只能管理负责项目的申购单
 
 **技术特点**：
 - **简化版数据模型**：避免复杂的审批流程，专注核心功能
+- **统一API服务**：前端使用统一的axios服务处理所有API调用
+- **权限控制完善**：支持角色级和项目级双重权限控制
 - **类型安全设计**：完整的TypeScript类型定义
 - **响应式UI**：基于Ant Design的现代化界面
 - **实时刷新机制**：创建后自动刷新列表数据
@@ -297,17 +302,297 @@ const loadData = useCallback(async () => {
 - `api.ts`已配置自动token附加，但某些组件绕过了该机制
 - 后端权限限制过于严格，业务角色无法执行必要操作
 
+### 项目级权限隔离系统 (2025-08-16)
+
+#### 核心功能
+多项目多项目经理环境下的权限隔离系统，确保申购单严格按项目权限控制。
+
+#### 权限矩阵
+| 角色 | 项目访问权限 | 申购单可见性 | 价格信息 |
+|------|-------------|-------------|----------|
+| 管理员 | 全部项目 | 全部申购单 | ✅ 可见 |
+| 项目经理 | 负责的项目 | 仅负责项目的申购单 | ❌ 隐藏 |
+| 采购员 | 全部项目 | 全部申购单 | ✅ 可见 |
+| 部门主管 | 全部项目 | 全部申购单 | ✅ 可见 |
+
+#### 测试账户
+- **管理员**: `admin` / `admin123`
+- **项目经理**: `test_pm` / `testpm123` (负责项目2,3)
+
+#### 快速验证权限隔离
+```bash
+# 1. 测试项目经理权限
+PM_TOKEN=$(curl -s -X POST "http://localhost:8000/api/v1/auth/login" \
+  -d "username=test_pm&password=testpm123" | jq -r '.access_token')
+
+curl -s "http://localhost:8000/api/v1/purchases/" \
+  -H "Authorization: Bearer $PM_TOKEN" | \
+  jq '{total: .total, projects: [.items[].project_id] | unique}'
+
+# 2. 对比管理员权限  
+ADMIN_TOKEN=$(curl -s -X POST "http://localhost:8000/api/v1/auth/login" \
+  -d "username=admin&password=admin123" | jq -r '.access_token')
+
+curl -s "http://localhost:8000/api/v1/purchases/" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.total'
+```
+
+#### 常见问题排查
+
+**问题1**：项目经理看不到申购单
+```bash
+# 检查项目分配
+curl -s "http://localhost:8000/api/v1/projects/" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | \
+  jq '.items[] | {id, project_name, project_manager}'
+```
+
+**问题2**：权限过滤不生效
+```bash
+# 检查枚举比较
+grep -r "current_user\.role.*==" backend/app/api/v1/purchases.py
+# 确保使用: current_user.role.value == "project_manager"
+```
+
 #### 系统化排查方法
 ```bash
 # 1. 验证后端API和数据完整性
-curl -X GET "http://localhost:8000/api/v1/purchases/" \
-     -H "Authorization: Bearer $TOKEN"
+curl -s "http://localhost:8000/api/v1/purchases/" -H "Authorization: Bearer $TOKEN" | jq '.total'
 
-# 2. 检查前端API调用方式
-grep -r "fetch.*api/v1" frontend/src/
-# 找出直接使用fetch的地方
+# 2. 检查后端日志
+tail -f backend.log | grep -E "(ERROR|权限|项目经理)"
 
-# 3. 验证权限配置
+# 3. 验证用户角色配置
+curl -s "http://localhost:8000/api/v1/auth/me" -H "Authorization: Bearer $TOKEN" | jq '.role'
+```
+
+### 批量删除功能问题 (2025-08-17)
+
+#### 问题场景
+用户报告批量删除功能完全不工作，单个删除正常，但批量删除无响应。
+
+#### 根本原因分析
+经过系统化调试发现两个关键问题：
+
+1. **前端API调用不统一**：
+   ```typescript
+   // ❌ 问题：混用fetch和api服务
+   await fetch('/api/v1/purchases/batch-delete', {
+     headers: { 'Authorization': `Bearer ${token}` }  // 手动处理
+   });
+   
+   // ✅ 解决：统一使用api服务
+   await api.post('purchases/batch-delete', idsToDelete);  // 自动处理
+   ```
+
+2. **Modal.confirm异步处理兼容性问题**：
+   ```typescript
+   // ❌ 问题：复杂异步回调
+   Modal.confirm({
+     onOk: () => new Promise(async (resolve, reject) => { ... })
+   });
+   
+   // ✅ 解决：使用原生confirm
+   if (window.confirm("确认删除吗？")) {
+     await executeDelete();
+   }
+   ```
+
+#### 系统化调试方法
+1. **分层测试**：后端API → 前端代理 → React组件 → 用户交互
+2. **独立验证**：创建简单HTML页面直接测试API
+3. **对比分析**：工作的功能vs不工作的功能找差异
+
+#### 解决方案
+- 统一使用`services/api.ts`进行所有API调用
+- 避免在Modal.confirm中使用复杂异步操作
+- 建立完整的调试工具链进行问题定位
+
+## 开发最佳实践
+
+### 前端API调用规范
+
+#### 1. 统一API服务使用
+**原则**：所有API调用必须使用统一的`services/api.ts`服务
+
+```typescript
+// ✅ 正确方式
+import api from '../../services/api';
+
+// GET请求
+const response = await api.get('purchases/', { params: { page, size } });
+
+// POST请求
+const response = await api.post('purchases/batch-delete', idsToDelete);
+
+// DELETE请求
+await api.delete(`purchases/${id}`);
+```
+
+**优势**：
+- 自动处理JWT token认证
+- 统一错误处理和拦截
+- 避免重复的请求配置代码
+
+#### 2. Modal组件使用注意事项
+**避免复杂异步操作**：
+```typescript
+// ❌ 问题写法：Modal.confirm + 复杂异步
+Modal.confirm({
+  onOk: () => new Promise(async (resolve, reject) => {
+    // 复杂异步操作可能导致状态管理问题
+  })
+});
+
+// ✅ 推荐写法：原生confirm + 直接异步调用
+if (window.confirm("确认操作吗？")) {
+  await executeOperation();
+}
+```
+
+### 调试方法论
+
+#### 1. 分层诊断思维
+```
+表象问题：功能不工作
+     ↓
+API层验证：curl测试后端
+     ↓
+网络层验证：代理和路由
+     ↓
+组件层验证：React状态和事件
+     ↓
+交互层验证：用户操作流程
+```
+
+#### 2. 独立测试优先
+创建简单的HTML页面直接测试API：
+```html
+<!-- debug-feature.html -->
+<script>
+async function testAPI() {
+  const response = await fetch('/api/v1/endpoint', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  console.log('测试结果:', await response.json());
+}
+</script>
+```
+
+### 权限系统开发规范
+1. **权限优先设计**：新功能开发前必须先设计权限控制
+2. **类型安全检查**：枚举比较使用`.value`属性，Schema定义严格验证
+3. **分层权限控制**：数据库层过滤 + API层验证 + 前端UI控制
+4. **可测试可验证**：为权限边界准备专门的测试工具
+
+### 调试工具链
+- **API测试**: `curl + jq` 快速验证后端
+- **权限测试**: `frontend/public/debug-user-auth.html` 调试页面
+- **日志分析**: `tail -f backend.log | grep ERROR`
+- **数据库查询**: 开发环境支持直接数据库访问
+
+### 项目级权限核心代码
+```python
+# backend/app/api/v1/purchases.py
+if current_user.role.value == "project_manager":
+    managed_projects = db.query(Project.id).filter(
+        Project.project_manager == current_user.name
+    ).all()
+    
+    if managed_projects:
+        managed_project_ids = [p.id for p in managed_projects]
+        query = query.filter(PurchaseRequest.project_id.in_(managed_project_ids))
+    else:
+        query = query.filter(PurchaseRequest.id == -1)  # 返回空结果
+```
+
+### 快速参考：项目级权限隔离系统 (2025-08-16)
+
+**核心功能**：多项目多项目经理环境下的权限隔离，确保申购单严格按项目权限控制。
+
+#### 快速验证权限隔离
+```bash
+# 1. 测试孙赟权限（只能看到项目2的申购单）
+SUNYUN_TOKEN=$(curl -s -X POST "http://localhost:8000/api/v1/auth/login" \
+  -d "username=sunyun&password=sunyun123" | jq -r '.access_token')
+
+curl -s "http://localhost:8000/api/v1/purchases/" \
+  -H "Authorization: Bearer $SUNYUN_TOKEN" | \
+  jq '{total: .total, projects: [.items[].project_id] | unique}'
+# 预期结果: {"total": 21, "projects": [2]}
+
+# 2. 测试李强权限（只能看到项目3的申购单）
+LIQIANG_TOKEN=$(curl -s -X POST "http://localhost:8000/api/v1/auth/login" \
+  -d "username=liqiang&password=liqiang123" | jq -r '.access_token')
+
+curl -s "http://localhost:8000/api/v1/purchases/" \
+  -H "Authorization: Bearer $LIQIANG_TOKEN" | \
+  jq '{total: .total, projects: [.items[].project_id] | unique}'
+# 预期结果: {"total": 3, "projects": [3]}
+
+# 3. 对比管理员权限（可以看到所有申购单）
+ADMIN_TOKEN=$(curl -s -X POST "http://localhost:8000/api/v1/auth/login" \
+  -d "username=admin&password=admin123" | jq -r '.access_token')
+
+curl -s "http://localhost:8000/api/v1/purchases/" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.total'
+# 预期结果: 24 (所有申购单)
+```
+
+#### 测试账户
+- **管理员**: `admin` / `admin123` (全部权限)
+- **项目经理(孙赟)**: `sunyun` / `sunyun123` (负责项目2-娄山关路445弄综合弱电智能化)
+- **项目经理(李强)**: `liqiang` / `liqiang123` (负责项目3-某小区智能化改造项目)
+
+#### 权限矩阵速查
+| 角色 | 项目访问 | 申购单可见性 | 价格信息 | 数据范围 |
+|------|---------|-------------|----------|---------|
+| 管理员 | 全部项目 | 全部申购单 | ✅ 可见 | 无限制 |
+| 项目经理 | 负责的项目 | 仅负责项目申购单 | ❌ 隐藏 | 严格隔离 |
+| 采购员 | 全部项目 | 全部申购单 | ✅ 可见 | 无限制 |
+| 部门主管 | 全部项目 | 全部申购单 | ✅ 可见 | 无限制 |
+
+#### 常见问题快速排查
+```bash
+# 问题1：项目经理看不到申购单
+curl -s "http://localhost:8000/api/v1/projects/" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | \
+  jq '.items[] | {id, project_name, project_manager}'
+
+# 问题2：权限过滤不生效 - 检查枚举比较
+grep -r "current_user\.role.*==" backend/app/api/v1/purchases.py
+# 确保使用: current_user.role.value == "project_manager"
+
+# 问题3：验证用户角色
+curl -s "http://localhost:8000/api/v1/auth/me" \
+  -H "Authorization: Bearer $TOKEN" | jq '.role'
+```
+
+## 系统架构
+
+### 技术栈
+- **后端**：FastAPI + SQLAlchemy + PostgreSQL  
+- **前端**：React + TypeScript + Ant Design
+- **认证**：JWT Token认证 + 多角色权限控制
+- **部署**：AWS c7i-flex.large + Docker容器化
+
+### 核心模块
+- ✅ **项目管理模块**：项目创建、信息管理、进度跟踪
+- ✅ **合同清单管理**：Excel导入、版本控制、物料管理
+- ✅ **申购请购模块**：智能申购、多级审批、项目级权限隔离
+- ✅ **用户权限系统**：7角色权限矩阵、JWT认证、权限隔离
+- ✅ **系统测试模块**：自动化测试、测试报告、质量监控
+
+### 权限架构设计
+**多级权限控制**：
+- **数据库层**：SQL查询过滤
+- **API层**：权限验证和数据脱敏
+- **前端层**：UI权限控制和功能隐藏
+
+**项目级权限隔离**：
+- 项目经理只能访问负责的项目数据
+- 支持一个经理管理多个项目
+- 动态权限分配和验证
 curl -X POST "http://localhost:8000/api/v1/auth/login" \
      -H "Content-Type: application/x-www-form-urlencoded" \
      -d "username=purchaser&password=purchase123"
@@ -943,6 +1228,149 @@ done
 2. 检查服务状态
 3. 使用诊断脚本：`./scripts/diagnose-frontend.sh`
 4. 确认AWS安全组配置正确
+
+## 项目经理权限系统开发实战 (2025-08-17)
+
+### 开发背景
+基于用户需求"多个项目可能对应多个项目经理，如何确保这两个项目的申购单互相独立，不受影响？"，我们开发了完整的项目级权限隔离系统。
+
+### 核心技术实现
+
+#### 1. 数据库层权限过滤
+**文件位置**: `backend/app/api/v1/purchases.py` (第238-252行)
+```python
+# 项目经理权限过滤核心逻辑
+if current_user.role.value == "project_manager":
+    managed_projects = db.query(Project.id).filter(
+        Project.project_manager == current_user.name
+    ).all()
+    
+    if managed_projects:
+        managed_project_ids = [p.id for p in managed_projects]
+        query = query.filter(PurchaseRequest.project_id.in_(managed_project_ids))
+    else:
+        query = query.filter(PurchaseRequest.id == -1)  # 确保返回空结果
+```
+
+#### 2. 测试账号配置
+```
+孙赟: sunyun/sunyun123 (负责项目2-娄山关路445弄综合弱电智能化)
+李强: liqiang/liqiang123 (负责项目3-某小区智能化改造项目)
+管理员: admin/admin123 (全部权限)
+```
+
+### 重大技术问题及解决方案
+
+#### 问题1: UserRole枚举比较失败
+**现象**: 项目经理仍能看到所有申购单，权限过滤不生效
+**根本原因**: Python枚举不能直接与字符串比较
+```python
+# ❌ 错误写法
+if current_user.role == "project_manager":
+
+# ✅ 正确写法
+if current_user.role.value == "project_manager":
+```
+**影响范围**: 修复了6处枚举比较错误
+
+#### 问题2: Pydantic Schema类型定义冲突
+**现象**: `PurchaseRequestWithoutPrice` Schema编译错误
+**错误信息**: `Types of property 'total_amount' are incompatible`
+```python
+# ❌ 问题方式：类型冲突
+class PurchaseRequestWithoutPrice(PurchaseRequestInDB):
+    total_amount: None = None  # 试图修改父类字段类型
+
+# ✅ 解决方案：明确定义字段
+class PurchaseRequestWithoutPrice(BaseModel):
+    id: int
+    request_code: str
+    # ... 明确定义需要的字段，不包含price相关字段
+```
+
+#### 问题3: 重复用户账号冲突
+**现象**: 数据库中存在多个同名用户，导致权限混乱
+**解决方案**: 清理重复用户并建立唯一用户名规范
+```bash
+# 清理重复用户的命令示例
+DELETE FROM users WHERE username IN ('pm_li', 'pm_孙赟', 'pm_李强');
+```
+
+#### 问题4: 前端服务端口问题
+**现象**: 前端自动切换到3001端口，导致CORS配置失效
+**解决方案**: 
+1. 强制设置PORT环境变量为3000
+2. 更新CORS配置包含所有必要端口
+```bash
+export PORT=3000
+export REACT_APP_API_BASE_URL=http://localhost:8000
+npm start
+```
+
+### 调试方法论
+
+#### 系统化调试流程
+```bash
+# 1. 验证后端权限逻辑
+curl -s "http://localhost:8000/api/v1/purchases/" -H "Authorization: Bearer $TOKEN" | jq .
+
+# 2. 检查数据库权限分配
+curl -s "http://localhost:8000/api/v1/projects/" -H "Authorization: Bearer $TOKEN" | \
+  jq '.items[] | {id, project_name, project_manager}'
+
+# 3. 验证用户角色配置
+curl -s "http://localhost:8000/api/v1/auth/me" -H "Authorization: Bearer $TOKEN" | jq '.role'
+
+# 4. 测试权限隔离效果
+for user in sunyun liqiang; do
+  echo "=== 测试 $user ==="
+  TOKEN=$(curl -s -X POST "http://localhost:8000/api/v1/auth/login" \
+    -d "username=$user&password=${user}123" | jq -r '.access_token')
+  curl -s "http://localhost:8000/api/v1/purchases/" \
+    -H "Authorization: Bearer $TOKEN" | \
+    jq '{total: .total, projects: [.items[].project_id] | unique}'
+done
+```
+
+#### 快速问题定位命令
+```bash
+# 检查枚举比较问题
+grep -rn "current_user\.role.*==" backend/app/api/v1/
+
+# 验证Schema字段定义
+grep -A 10 -B 5 "PurchaseRequestWithoutPrice" backend/app/schemas/purchase.py
+
+# 检查用户重复问题
+python3 -c "
+from app.core.database import SessionLocal
+from app.models.user import User
+db = SessionLocal()
+users = db.query(User).filter(User.name.in_(['孙赟', '李强'])).all()
+for u in users: print(f'{u.name} ({u.username})')
+"
+```
+
+### 权限验证结果
+- ✅ 孙赟只能看到项目2的21条申购单 (娄山关路项目)
+- ✅ 李强只能看到项目3的3条申购单 (某小区智能化改造)
+- ✅ 管理员可以看到全部24条申购单
+- ✅ 价格信息对项目经理完全隐藏
+- ✅ 项目间权限严格隔离，互不影响
+
+### 性能和安全考虑
+```sql
+-- 优化索引
+CREATE INDEX idx_projects_project_manager ON projects(project_manager);
+CREATE INDEX idx_purchase_requests_project_id ON purchase_requests(project_id);
+```
+
+### 开发最佳实践总结
+1. **枚举类型规范**: Python枚举比较统一使用`.value`属性
+2. **Schema继承规范**: 避免修改父类字段类型，使用明确字段定义
+3. **权限测试驱动**: 权限边界测试优先于功能开发
+4. **多层安全防护**: 数据库层+API层+前端层三重权限控制
+5. **用户数据规范**: 建立用户名唯一性约束，避免重复账号
+6. **环境变量管理**: 前端端口等关键配置使用环境变量控制
 
 ## 📚 学习资源
 

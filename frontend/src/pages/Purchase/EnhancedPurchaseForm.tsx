@@ -19,6 +19,8 @@ import { PlusOutlined, DeleteOutlined, InfoCircleOutlined } from '@ant-design/ic
 import { useNavigate } from 'react-router-dom';
 import { createPurchaseRequest, getMaterialNamesByProject, getSpecificationsByMaterial } from '../../services/purchase';
 import { ItemType } from '../../types/purchase';
+import { ProjectService } from '../../services/project';
+import { Project } from '../../types/project';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -54,18 +56,40 @@ const EnhancedPurchaseForm: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<EnhancedPurchaseItem[]>([]);
-  const [projectId] = useState(2); // 暂时使用固定项目ID
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [materialNames, setMaterialNames] = useState<string[]>([]);
+
+  // 加载项目列表
+  const loadProjects = useCallback(async () => {
+    try {
+      const response = await ProjectService.getProjects(1, 100); // 获取所有项目
+      setProjects(response.items || []);
+    } catch (error) {
+      console.error('获取项目列表失败:', error);
+      message.error('获取项目列表失败');
+    }
+  }, []);
 
   // 加载项目的物料名称列表
   const loadMaterialNames = useCallback(async () => {
+    if (!selectedProjectId) {
+      setMaterialNames([]);
+      return;
+    }
+    
     try {
-      const response = await getMaterialNamesByProject(projectId, '主材');
+      const response = await getMaterialNamesByProject(selectedProjectId, '主材');
       setMaterialNames(response.material_names);
     } catch (error) {
       console.error('获取物料名称失败:', error);
+      message.error('获取物料名称失败');
     }
-  }, [projectId]);
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
 
   useEffect(() => {
     loadMaterialNames();
@@ -120,7 +144,7 @@ const EnhancedPurchaseForm: React.FC = () => {
     }
 
     try {
-      const response = await getSpecificationsByMaterial(projectId, materialName);
+      const response = await getSpecificationsByMaterial(selectedProjectId!, materialName);
       
       // 批量更新item状态
       setItems(items => items.map(item => {
@@ -236,6 +260,11 @@ const EnhancedPurchaseForm: React.FC = () => {
 
   // 保存申购单
   const handleSave = async () => {
+    if (!selectedProjectId) {
+      message.warning('请先选择项目');
+      return;
+    }
+    
     if (items.length === 0) {
       message.warning('请至少添加一个申购明细');
       return;
@@ -257,7 +286,7 @@ const EnhancedPurchaseForm: React.FC = () => {
 
       // 构建请求数据
       const requestData = {
-        project_id: projectId,
+        project_id: selectedProjectId!,
         required_date: values.required_date?.toISOString(),
         remarks: values.remarks,
         items: items.map(item => ({
@@ -502,8 +531,37 @@ const EnhancedPurchaseForm: React.FC = () => {
         <Card title="申购单基本信息" style={{ marginBottom: 16 }}>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item label="项目名称">
-                <Input disabled value="娄山关路445弄综合弱电智能化" />
+              <Form.Item 
+                label="项目名称" 
+                required
+                tooltip="请选择要申购物料的项目"
+              >
+                <Select
+                  value={selectedProjectId}
+                  placeholder="请选择项目"
+                  style={{ width: '100%' }}
+                  showSearch
+                  filterOption={(input, option) =>
+                    (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+                  }
+                  onChange={(value) => {
+                    setSelectedProjectId(value);
+                    // 清空现有的申购明细
+                    setItems([]);
+                    setMaterialNames([]);
+                  }}
+                >
+                  {projects.map(project => (
+                    <Option key={project.id} value={project.id} label={project.project_name}>
+                      <div>
+                        <div>{project.project_name}</div>
+                        <div style={{ fontSize: '12px', color: '#999' }}>
+                          {project.project_code} | {project.status === 'in_progress' ? '进行中' : project.status}
+                        </div>
+                      </div>
+                    </Option>
+                  ))}
+                </Select>
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -525,7 +583,13 @@ const EnhancedPurchaseForm: React.FC = () => {
         <Card 
           title="申购明细" 
           extra={
-            <Button type="primary" icon={<PlusOutlined />} onClick={addItem}>
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />} 
+              onClick={addItem}
+              disabled={!selectedProjectId}
+              title={!selectedProjectId ? "请先选择项目" : "添加申购明细"}
+            >
               添加明细
             </Button>
           }
@@ -537,7 +601,11 @@ const EnhancedPurchaseForm: React.FC = () => {
             rowKey="id"
             pagination={false}
             scroll={{ x: 1200 }}
-            locale={{ emptyText: '请点击"添加明细"按钮添加申购物料' }}
+            locale={{ 
+              emptyText: selectedProjectId 
+                ? '请点击"添加明细"按钮添加申购物料' 
+                : '请先选择项目，然后添加申购明细'
+            }}
             size="small"
           />
         </Card>

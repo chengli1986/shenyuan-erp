@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>批量删除调试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        button { margin: 5px; padding: 8px 16px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        pre { background: #f5f5f5; padding: 10px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>批量删除调试工具</h1>
+    
+    <div class="section">
+        <h3>1. 登录测试</h3>
+        <button onclick="loginTest()">登录孙赟</button>
+        <div id="loginResult"></div>
+    </div>
+
+    <div class="section">
+        <h3>2. 获取申购单列表</h3>
+        <button onclick="getPurchaseList()">获取申购单</button>
+        <div id="listResult"></div>
+    </div>
+
+    <div class="section">
+        <h3>3. 批量删除测试</h3>
+        <input type="text" id="deleteIds" placeholder="输入要删除的ID，用逗号分隔，如: 10,11" style="width: 300px;">
+        <button onclick="batchDeleteTest()">批量删除</button>
+        <div id="deleteResult"></div>
+    </div>
+
+    <script>
+        let currentToken = null;
+
+        async function loginTest() {
+            const resultDiv = document.getElementById('loginResult');
+            try {
+                const formData = new FormData();
+                formData.append('username', 'sunyun');
+                formData.append('password', 'sunyun123');
+
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    currentToken = data.access_token;
+                    resultDiv.innerHTML = `<div class="success">✅ 登录成功<br>用户: ${data.user.name} (${data.user.role})</div>`;
+                } else {
+                    const error = await response.text();
+                    resultDiv.innerHTML = `<div class="error">❌ 登录失败: ${error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 网络错误: ${error}</div>`;
+            }
+        }
+
+        async function getPurchaseList() {
+            const resultDiv = document.getElementById('listResult');
+            if (!currentToken) {
+                resultDiv.innerHTML = '<div class="error">❌ 请先登录</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/purchases/?page=1&size=10', {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    let html = `<div class="success">✅ 获取成功，总数: ${data.total}</div>`;
+                    html += '<div class="info">草稿状态申购单:</div>';
+                    const draftItems = data.items.filter(item => item.status === 'draft');
+                    draftItems.forEach(item => {
+                        html += `<div>ID: ${item.id} - ${item.request_code} - 项目ID: ${item.project_id}</div>`;
+                    });
+                    html += `<pre>${JSON.stringify(draftItems, null, 2)}</pre>`;
+                    resultDiv.innerHTML = html;
+                } else {
+                    const error = await response.text();
+                    resultDiv.innerHTML = `<div class="error">❌ 获取失败: ${error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 网络错误: ${error}</div>`;
+            }
+        }
+
+        async function batchDeleteTest() {
+            const resultDiv = document.getElementById('deleteResult');
+            const idsInput = document.getElementById('deleteIds').value;
+            
+            if (!currentToken) {
+                resultDiv.innerHTML = '<div class="error">❌ 请先登录</div>';
+                return;
+            }
+
+            if (!idsInput.trim()) {
+                resultDiv.innerHTML = '<div class="error">❌ 请输入要删除的ID</div>';
+                return;
+            }
+
+            try {
+                const ids = idsInput.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+                console.log('准备删除的IDs:', ids);
+
+                const response = await fetch('/api/v1/purchases/batch-delete', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(ids)
+                });
+
+                console.log('删除响应状态:', response.status);
+                const result = await response.json();
+                console.log('删除响应数据:', result);
+
+                if (response.ok) {
+                    let html = `<div class="success">✅ 批量删除响应成功</div>`;
+                    html += `<div class="info">删除数量: ${result.deleted_count}</div>`;
+                    html += `<div class="info">请求数量: ${result.total_requested}</div>`;
+                    if (result.failed_requests && result.failed_requests.length > 0) {
+                        html += `<div class="error">失败数量: ${result.failed_requests.length}</div>`;
+                        html += `<pre>${JSON.stringify(result.failed_requests, null, 2)}</pre>`;
+                    }
+                    html += `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ 删除失败: ${result.detail || response.statusText}</div>`;
+                }
+            } catch (error) {
+                console.error('批量删除错误:', error);
+                resultDiv.innerHTML = `<div class="error">❌ 网络错误: ${error}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

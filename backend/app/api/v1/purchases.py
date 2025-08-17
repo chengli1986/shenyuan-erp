@@ -12,16 +12,18 @@ from app.api import deps
 from app.core.database import get_db
 from app.models.purchase import (
     PurchaseRequest, PurchaseRequestItem, PurchaseApproval,
-    Supplier, PurchaseStatus, ItemType, ApprovalStatus
+    Supplier, PurchaseStatus, ItemType, ApprovalStatus,
+    PurchaseWorkflowLog
 )
 from app.models.project import Project
 from app.models.contract import ContractItem
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.purchase import (
     PurchaseRequestCreate, PurchaseRequestUpdate, PurchaseRequestInDB,
     PurchaseRequestWithItems, PurchaseRequestWithoutPrice,
     PurchaseRequestSubmit, PurchaseRequestQuote, PurchaseRequestApprove,
-    PurchaseItemPriceQuote, SupplierCreate, SupplierUpdate, SupplierInDB,
+    PurchaseRequestPriceQuote, PurchaseItemPriceQuote, 
+    SupplierCreate, SupplierUpdate, SupplierInDB,
     PurchaseRequestListResponse, SupplierListResponse,
     AuxiliaryTemplateCreate, AuxiliaryTemplateInDB
 )
@@ -415,21 +417,43 @@ async def submit_purchase_request(
     current_user: User = Depends(deps.get_current_user)
 ):
     """提交申购单（项目经理）"""
+    
     request = db.query(PurchaseRequest).filter(PurchaseRequest.id == request_id).first()
     if not request:
         raise HTTPException(status_code=404, detail="申购单不存在")
     
-    # 权限检查
-    if request.requester_id != current_user.id:
-        raise HTTPException(status_code=403, detail="无权提交此申购单")
+    # 权限检查 - 只有项目经理可以提交
+    if current_user.role.value != "project_manager":
+        raise HTTPException(status_code=403, detail="只有项目经理可以提交申购单")
+    
+    # 项目权限检查
+    if current_user.role.value == "project_manager":
+        managed_projects = db.query(Project.id).filter(
+            Project.project_manager == current_user.name
+        ).all()
+        
+        if managed_projects:
+            managed_project_ids = [p.id for p in managed_projects]
+            if request.project_id not in managed_project_ids:
+                raise HTTPException(status_code=403, detail="无权提交此申购单")
+        else:
+            raise HTTPException(status_code=403, detail="无权提交此申购单")
     
     # 状态检查
     if request.status != PurchaseStatus.DRAFT:
         raise HTTPException(status_code=400, detail="只能提交草稿状态的申购单")
     
+    # 工作流步骤检查
+    if request.current_step != "project_manager":
+        raise HTTPException(status_code=400, detail="当前步骤不允许提交操作")
+    
     # 验证申购项完整性
     if not request.items:
         raise HTTPException(status_code=400, detail="申购单必须包含至少一个申购项")
+    
+    # 验证必填字段
+    if not request.system_category:
+        raise HTTPException(status_code=400, detail="请填写所属系统信息")
     
     # 主材数量校验
     service = PurchaseService(db)
@@ -438,8 +462,28 @@ async def submit_purchase_request(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
-    # 更新状态
+    # 查找采购员（下一步审批人）
+    purchaser = db.query(User).filter(User.role == UserRole.PURCHASER).first()
+    if not purchaser:
+        raise HTTPException(status_code=500, detail="系统中未找到采购员角色")
+    
+    # 更新申购单状态和工作流
     request.status = PurchaseStatus.SUBMITTED
+    request.current_step = "purchaser"
+    request.current_approver_id = purchaser.id
+    
+    # 记录工作流操作
+    workflow_log = PurchaseWorkflowLog(
+        request_id=request_id,
+        from_step="project_manager",
+        to_step="purchaser",
+        operation="submit",
+        operator_id=current_user.id,
+        operator_role=current_user.role.value,
+        operation_notes=f"项目经理 {current_user.name} 提交申购单"
+    )
+    db.add(workflow_log)
+    
     db.commit()
     db.refresh(request)
     
@@ -451,14 +495,14 @@ async def submit_purchase_request(
 @router.post("/{request_id}/quote", response_model=PurchaseRequestInDB)
 async def quote_purchase_request(
     request_id: int,
-    quote_data: PurchaseRequestQuote,
+    quote_data: PurchaseRequestPriceQuote,
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
     """
     申购单询价（采购员）
     - 填写供应商信息和价格
-    - 预计到货时间
+    - 预计到货时间和付款方式
     """
     if current_user.role.value not in ["purchaser", "admin"]:
         raise HTTPException(status_code=403, detail="只有采购员可以进行询价")
@@ -470,6 +514,14 @@ async def quote_purchase_request(
     # 状态检查
     if request.status != PurchaseStatus.SUBMITTED:
         raise HTTPException(status_code=400, detail="只能对已提交的申购单进行询价")
+    
+    # 工作流步骤检查
+    if request.current_step != "purchaser":
+        raise HTTPException(status_code=400, detail="当前步骤不允许询价操作")
+    
+    # 权限检查：是否为当前审批人
+    if request.current_approver_id and request.current_approver_id != current_user.id:
+        raise HTTPException(status_code=403, detail="非当前指定审批人，无权操作")
     
     # 更新申购项价格信息
     total_amount = 0
@@ -494,18 +546,218 @@ async def quote_purchase_request(
         
         total_amount += item.total_price
     
-    # 更新申购单总金额和状态
+    # 查找部门主管（下一步审批人）
+    dept_manager = db.query(User).filter(User.role == UserRole.DEPT_MANAGER).first()
+    if not dept_manager:
+        raise HTTPException(status_code=500, detail="系统中未找到部门主管角色")
+    
+    # 更新申购单信息
     request.total_amount = total_amount
     request.status = PurchaseStatus.PRICE_QUOTED
+    request.payment_method = quote_data.payment_method
+    request.estimated_delivery_date = quote_data.estimated_delivery_date
+    request.current_step = "dept_manager"
+    request.current_approver_id = dept_manager.id
+    
+    # 记录工作流操作
+    workflow_log = PurchaseWorkflowLog(
+        request_id=request_id,
+        from_step="purchaser",
+        to_step="dept_manager",
+        operation="quote",
+        operator_id=current_user.id,
+        operator_role=current_user.role.value,
+        operation_notes=f"采购员 {current_user.name} 完成询价，总金额: {total_amount}",
+        operation_data={
+            "total_amount": float(total_amount),
+            "payment_method": quote_data.payment_method.value,
+            "estimated_delivery": quote_data.estimated_delivery_date.isoformat() if quote_data.estimated_delivery_date else None,
+            "quote_notes": quote_data.quote_notes
+        }
+    )
+    db.add(workflow_log)
     
     db.commit()
     db.refresh(request)
     
-    # TODO: 发送通知给项目主管审批
+    # TODO: 发送通知给部门主管审批
     
     return request
 
 
+@router.post("/{request_id}/dept-approve", response_model=PurchaseRequestInDB)
+async def dept_approve_purchase_request(
+    request_id: int,
+    approval_data: PurchaseRequestApprove,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    部门主管审批申购单
+    - 技术审查和预算控制
+    """
+    if current_user.role.value not in ["dept_manager", "admin"]:
+        raise HTTPException(status_code=403, detail="只有部门主管可以进行部门审批")
+    
+    request = db.query(PurchaseRequest).filter(PurchaseRequest.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="申购单不存在")
+    
+    # 状态检查
+    if request.status != PurchaseStatus.PRICE_QUOTED:
+        raise HTTPException(status_code=400, detail="只能对已询价的申购单进行审批")
+    
+    # 工作流步骤检查
+    if request.current_step != "dept_manager":
+        raise HTTPException(status_code=400, detail="当前步骤不允许部门审批操作")
+    
+    # 权限检查：是否为当前审批人
+    if request.current_approver_id and request.current_approver_id != current_user.id:
+        raise HTTPException(status_code=403, detail="非当前指定审批人，无权操作")
+    
+    # 处理审批结果
+    if approval_data.approval_status == ApprovalStatus.APPROVED:
+        # 查找总经理（下一步审批人）
+        general_manager = db.query(User).filter(User.role == UserRole.GENERAL_MANAGER).first()
+        if not general_manager:
+            raise HTTPException(status_code=500, detail="系统中未找到总经理角色")
+        
+        # 更新申购单状态和工作流
+        request.status = PurchaseStatus.DEPT_APPROVED
+        request.current_step = "general_manager"
+        request.current_approver_id = general_manager.id
+        operation = "approve"
+        to_step = "general_manager"
+        
+    elif approval_data.approval_status == ApprovalStatus.REJECTED:
+        # 拒绝：重置到采购员步骤重新询价
+        purchaser = db.query(User).filter(User.role == UserRole.PURCHASER).first()
+        request.status = PurchaseStatus.SUBMITTED
+        request.current_step = "purchaser"
+        request.current_approver_id = purchaser.id if purchaser else None
+        operation = "reject"
+        to_step = "purchaser"
+    
+    # 更新审批意见
+    request.approval_notes = approval_data.approval_notes
+    
+    # 创建审批记录
+    approval = PurchaseApproval(
+        request_id=request_id,
+        approver_id=current_user.id,
+        approver_role=current_user.role.value,
+        approval_level=1,  # 部门审批为第一级
+        approval_status=approval_data.approval_status,
+        approval_notes=approval_data.approval_notes,
+        can_view_price=True
+    )
+    db.add(approval)
+    
+    # 记录工作流操作
+    workflow_log = PurchaseWorkflowLog(
+        request_id=request_id,
+        from_step="dept_manager",
+        to_step=to_step,
+        operation=operation,
+        operator_id=current_user.id,
+        operator_role=current_user.role.value,
+        operation_notes=f"部门主管 {current_user.name} {operation}申购单：{approval_data.approval_notes or '无备注'}"
+    )
+    db.add(workflow_log)
+    
+    db.commit()
+    db.refresh(request)
+    
+    # TODO: 发送通知给下一步审批人
+    
+    return request
+
+
+@router.post("/{request_id}/final-approve", response_model=PurchaseRequestInDB)
+async def final_approve_purchase_request(
+    request_id: int,
+    approval_data: PurchaseRequestApprove,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    总经理最终审批申购单
+    - 最终决策和预算批准
+    """
+    if current_user.role.value not in ["general_manager", "admin"]:
+        raise HTTPException(status_code=403, detail="只有总经理可以进行最终审批")
+    
+    request = db.query(PurchaseRequest).filter(PurchaseRequest.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="申购单不存在")
+    
+    # 状态检查
+    if request.status != PurchaseStatus.DEPT_APPROVED:
+        raise HTTPException(status_code=400, detail="只能对部门已审批的申购单进行最终审批")
+    
+    # 工作流步骤检查
+    if request.current_step != "general_manager":
+        raise HTTPException(status_code=400, detail="当前步骤不允许最终审批操作")
+    
+    # 权限检查：是否为当前审批人
+    if request.current_approver_id and request.current_approver_id != current_user.id:
+        raise HTTPException(status_code=403, detail="非当前指定审批人，无权操作")
+    
+    # 处理审批结果
+    if approval_data.approval_status == ApprovalStatus.APPROVED:
+        # 最终批准：完成工作流
+        request.status = PurchaseStatus.FINAL_APPROVED
+        request.current_step = "completed"
+        request.current_approver_id = None
+        operation = "final_approve"
+        to_step = "completed"
+        
+    elif approval_data.approval_status == ApprovalStatus.REJECTED:
+        # 拒绝：重置到部门主管步骤重新审批
+        dept_manager = db.query(User).filter(User.role == UserRole.DEPT_MANAGER).first()
+        request.status = PurchaseStatus.PRICE_QUOTED
+        request.current_step = "dept_manager"
+        request.current_approver_id = dept_manager.id if dept_manager else None
+        operation = "reject"
+        to_step = "dept_manager"
+    
+    # 更新审批意见
+    request.approval_notes = approval_data.approval_notes
+    
+    # 创建审批记录
+    approval = PurchaseApproval(
+        request_id=request_id,
+        approver_id=current_user.id,
+        approver_role=current_user.role.value,
+        approval_level=2,  # 总经理审批为第二级
+        approval_status=approval_data.approval_status,
+        approval_notes=approval_data.approval_notes,
+        can_view_price=True
+    )
+    db.add(approval)
+    
+    # 记录工作流操作
+    workflow_log = PurchaseWorkflowLog(
+        request_id=request_id,
+        from_step="general_manager",
+        to_step=to_step,
+        operation=operation,
+        operator_id=current_user.id,
+        operator_role=current_user.role.value,
+        operation_notes=f"总经理 {current_user.name} {operation}申购单：{approval_data.approval_notes or '无备注'}"
+    )
+    db.add(workflow_log)
+    
+    db.commit()
+    db.refresh(request)
+    
+    # TODO: 发送完成通知给相关人员
+    # TODO: 如果最终批准，准备PDF生成
+    
+    return request
+
+
+# 保留原有通用审批API作为兼容性接口
 @router.post("/{request_id}/approve", response_model=PurchaseRequestInDB)
 async def approve_purchase_request(
     request_id: int,
@@ -514,52 +766,76 @@ async def approve_purchase_request(
     current_user: User = Depends(deps.get_current_user)
 ):
     """
-    审批申购单
-    - 项目主管：一级审批
-    - 总经理：最终审批
+    通用审批接口（兼容性保留）
+    根据用户角色自动路由到对应审批流程
     """
+    if current_user.role.value == "dept_manager":
+        return await dept_approve_purchase_request(request_id, approval_data, db, current_user)
+    elif current_user.role.value in ["general_manager", "admin"]:
+        return await final_approve_purchase_request(request_id, approval_data, db, current_user)
+    else:
+        raise HTTPException(status_code=403, detail="无审批权限")
+
+
+@router.get("/{request_id}/workflow-logs")
+async def get_purchase_workflow_logs(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    获取申购单工作流操作历史
+    """
+    # 检查申购单是否存在
     request = db.query(PurchaseRequest).filter(PurchaseRequest.id == request_id).first()
     if not request:
         raise HTTPException(status_code=404, detail="申购单不存在")
     
-    # 确定审批级别
-    if current_user.role.value == "dept_manager":
-        approval_level = 1
-        next_status = PurchaseStatus.DEPT_APPROVED if approval_data.approval_status == ApprovalStatus.APPROVED else PurchaseStatus.REJECTED
-    elif current_user.role.value in ["general_manager", "admin"]:
-        approval_level = 2
-        next_status = PurchaseStatus.FINAL_APPROVED if approval_data.approval_status == ApprovalStatus.APPROVED else PurchaseStatus.REJECTED
-    else:
-        raise HTTPException(status_code=403, detail="无审批权限")
+    # 项目权限检查
+    if current_user.role.value == "project_manager":
+        managed_projects = db.query(Project.id).filter(
+            Project.project_manager == current_user.name
+        ).all()
+        
+        if managed_projects:
+            managed_project_ids = [p.id for p in managed_projects]
+            if request.project_id not in managed_project_ids:
+                raise HTTPException(status_code=403, detail="无权查看此申购单的工作流历史")
+        else:
+            raise HTTPException(status_code=403, detail="无权查看此申购单的工作流历史")
     
-    # 状态检查
-    if approval_level == 1 and request.status != PurchaseStatus.PRICE_QUOTED:
-        raise HTTPException(status_code=400, detail="申购单状态不正确")
-    if approval_level == 2 and request.status != PurchaseStatus.DEPT_APPROVED:
-        raise HTTPException(status_code=400, detail="申购单需要先经过部门审批")
+    # 查询工作流日志
+    logs = db.query(PurchaseWorkflowLog).filter(
+        PurchaseWorkflowLog.request_id == request_id
+    ).order_by(PurchaseWorkflowLog.created_at.asc()).all()
     
-    # 创建审批记录
-    approval = PurchaseApproval(
-        request_id=request_id,
-        approver_id=current_user.id,
-        approver_role=current_user.role,
-        approval_level=approval_level,
-        approval_status=approval_data.approval_status,
-        approval_notes=approval_data.approval_notes,
-        can_view_price=True  # 审批人可以看到价格
-    )
-    db.add(approval)
+    # 获取操作人信息
+    result_logs = []
+    for log in logs:
+        operator = db.query(User).filter(User.id == log.operator_id).first()
+        operator_name = operator.name if operator else "未知用户"
+        
+        result_logs.append({
+            "id": log.id,
+            "from_step": log.from_step.value if log.from_step else None,
+            "to_step": log.to_step.value,
+            "operation": log.operation,
+            "operator_id": log.operator_id,
+            "operator_name": operator_name,
+            "operator_role": log.operator_role,
+            "operation_notes": log.operation_notes,
+            "operation_data": log.operation_data,
+            "created_at": log.created_at.isoformat()
+        })
     
-    # 更新申购单状态
-    request.status = next_status
-    request.approval_notes = approval_data.approval_notes
-    
-    db.commit()
-    db.refresh(request)
-    
-    # TODO: 发送通知
-    
-    return request
+    return {
+        "request_id": request_id,
+        "request_code": request.request_code,
+        "current_step": request.current_step,
+        "current_status": request.status.value,
+        "total_logs": len(result_logs),
+        "logs": result_logs
+    }
 
 
 @router.delete("/{request_id}")
@@ -573,8 +849,25 @@ async def delete_purchase_request(
     if not request:
         raise HTTPException(status_code=404, detail="申购单不存在")
     
-    # 权限检查
-    if request.requester_id != current_user.id and current_user.role != "admin":
+    # 权限检查 - 扩展项目经理权限
+    can_delete = False
+    
+    # 1. 申购单创建者可以删除
+    if request.requester_id == current_user.id:
+        can_delete = True
+    
+    # 2. 管理员可以删除任何申购单
+    elif current_user.role.value == "admin":
+        can_delete = True
+    
+    # 3. 项目经理可以删除其负责项目的草稿申购单
+    elif current_user.role.value == "project_manager":
+        # 查询项目信息确认项目经理权限
+        project = db.query(Project).filter(Project.id == request.project_id).first()
+        if project and project.project_manager == current_user.name:
+            can_delete = True
+    
+    if not can_delete:
         raise HTTPException(status_code=403, detail="无权删除此申购单")
     
     # 状态检查
@@ -585,6 +878,88 @@ async def delete_purchase_request(
     db.commit()
     
     return {"detail": "申购单已删除"}
+
+
+@router.post("/batch-delete")
+async def batch_delete_purchase_requests(
+    request_ids: List[int],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """批量删除申购单（仅草稿状态）"""
+    if not request_ids:
+        raise HTTPException(status_code=400, detail="请提供要删除的申购单ID列表")
+    
+    if len(request_ids) > 100:
+        raise HTTPException(status_code=400, detail="单次最多删除100条申购单")
+    
+    # 查询所有要删除的申购单
+    requests = db.query(PurchaseRequest).filter(
+        PurchaseRequest.id.in_(request_ids)
+    ).all()
+    
+    if not requests:
+        raise HTTPException(status_code=404, detail="没有找到要删除的申购单")
+    
+    deleted_count = 0
+    failed_requests = []
+    
+    for request in requests:
+        try:
+            # 权限检查 - 扩展项目经理权限
+            can_delete = False
+            
+            # 1. 申购单创建者可以删除
+            if request.requester_id == current_user.id:
+                can_delete = True
+            
+            # 2. 管理员可以删除任何申购单
+            elif current_user.role.value == "admin":
+                can_delete = True
+            
+            # 3. 项目经理可以删除其负责项目的草稿申购单
+            elif current_user.role.value == "project_manager":
+                # 查询项目信息确认项目经理权限
+                project = db.query(Project).filter(Project.id == request.project_id).first()
+                if project and project.project_manager == current_user.name:
+                    can_delete = True
+            
+            if not can_delete:
+                failed_requests.append({
+                    "id": request.id,
+                    "request_code": request.request_code,
+                    "reason": "无权删除此申购单"
+                })
+                continue
+            
+            # 状态检查
+            if request.status != PurchaseStatus.DRAFT:
+                failed_requests.append({
+                    "id": request.id,
+                    "request_code": request.request_code,
+                    "reason": "只能删除草稿状态的申购单"
+                })
+                continue
+            
+            # 删除申购单（数据库会自动删除关联的items）
+            db.delete(request)
+            deleted_count += 1
+            
+        except Exception as e:
+            failed_requests.append({
+                "id": request.id,
+                "request_code": request.request_code,
+                "reason": f"删除失败: {str(e)}"
+            })
+    
+    db.commit()
+    
+    return {
+        "detail": f"批量删除完成",
+        "deleted_count": deleted_count,
+        "total_requested": len(request_ids),
+        "failed_requests": failed_requests
+    }
 
 
 # ========== 供应商管理 ==========
