@@ -273,6 +273,67 @@ class PurchaseRequestItem(Base):
     system_category = relationship("SystemCategory", backref="purchase_items")
 ```
 
+#### 编辑页面系统分类显示修复 (v1.2 - 2025-08-19)
+
+**问题背景**：历史申购单编辑时，系统分类列显示横杠（-）而非具体系统名称
+
+**根本原因**：历史数据缺少系统分类信息（`system_category_id = null`），但新申购单功能完全正常
+
+**修复策略**：增强编辑页面，为所有申购明细提供系统分类选择功能
+
+**核心改进**：
+- ✅ **历史数据支持**：为所有申购明细加载项目系统分类选择器
+- ✅ **智能推荐保持**：主材仍有⭐标记的智能推荐功能
+- ✅ **手动选择增强**：用户可为历史数据手动选择系统分类
+- ✅ **类型安全保障**：全面的数组类型检查，消除运行时错误
+- ✅ **渐进式改善**：支持历史数据质量逐步完善
+
+**技术实现**：
+```typescript
+// 为所有明细项加载系统分类（新增功能）
+getAllSystemCategoriesByProject(projectId).then(allCategories => {
+  setItems(prevItems => prevItems.map(prevItem => ({
+    ...prevItem,
+    availableSystemCategories: allCategories  // 所有物料都可选择
+  })));
+});
+
+// 优化UI渲染逻辑：优先显示选择器而非横杠
+if (Array.isArray(record.availableSystemCategories) && record.availableSystemCategories.length > 0) {
+  return (
+    <Select
+      value={value}
+      placeholder={record.system_category_name || "选择系统"}
+      onChange={(categoryId) => {
+        // 同步更新ID和名称
+        const selectedCategory = record.availableSystemCategories.find(cat => cat.id === categoryId);
+        if (selectedCategory) {
+          setItems(items => items.map(item => 
+            item.id === record.id ? {
+              ...item,
+              system_category_id: categoryId,
+              system_category_name: selectedCategory.category_name
+            } : item
+          ));
+        }
+      }}
+    >
+      {record.availableSystemCategories.map(cat => (
+        <Select.Option key={cat.id} value={cat.id}>
+          {cat.is_suggested ? '⭐ ' : ''}{cat.category_name}
+        </Select.Option>
+      ))}
+    </Select>
+  );
+}
+```
+
+**用户体验改善**：
+- 编辑任何申购单（新的或历史的）都能看到系统分类选择器
+- 历史申购单可以手动选择并保存系统分类到数据库
+- 新申购单保持智能推荐功能（⭐标记推荐项）
+- 完全消除页面加载和操作中的技术错误
+
 ## 故障排除
 
 ### 申购单分页功能问题 (2025-08-16)

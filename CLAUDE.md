@@ -2501,3 +2501,392 @@
   - 开发新功能时重用已验证的组件，避免重复实现
   - 优先实现用户实际需要的功能，避免过度设计
   - 前端代理配置是开发环境的关键配置项，需要重启生效
+
+  ## 申购单工作流管理功能完善记录 (2025-08-18)
+
+  ### 开发背景和技术挑战
+  **核心需求**：用户提出需要完善申购单的工作流管理功能，实现项目经理→采购员→部门主管→总经理的多级审批流程。
+  **技术挑战**：
+  - 现有申购单功能基础良好，但缺少完整的工作流状态管理和历史记录
+  - 需要实现工作流历史记录追踪和可视化显示
+  - 前端API调用方式不统一，需要标准化处理
+  - 工作流状态显示需要更友好的用户界面
+
+  ### 4步渐进式开发策略完成 ✅
+
+  经过系统性分析，制定并完成了以下优先级明确的开发计划：
+  1. **修复前端工作流API调用** (高优先级) - 统一使用api服务 ✅
+  2. **优化工作流状态显示组件** (中优先级) - 提升用户体验 ✅
+  3. **添加工作流历史记录显示** (中优先级) - 可视化工作流进展 ✅
+  4. **创建完整测试数据** (低优先级) - 便于功能验证 ✅
+
+  ### 核心技术实现和突破
+
+  #### 1. 前端API调用标准化 (Step 1)
+  **实现位置**：`frontend/src/pages/Purchase/SimplePurchaseDetail.tsx`
+  **技术要点**：
+  - 统一所有工作流API调用使用`services/api.ts`服务
+  - 移除原有的raw `fetch()` calls，确保认证token自动处理
+  - 修复了提交、询价、审批等所有工作流操作的API调用
+  ```typescript
+  // 修复前：Raw fetch with manual token handling
+  const response = await fetch(`/api/v1/purchases/${purchaseData.id}/submit`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+  });
+  
+  // 修复后：Unified api service
+  await api.post(`purchases/${purchaseData.id}/submit`);
+  ```
+
+  #### 2. 工作流状态显示优化 (Step 2)
+  **实现位置**：`frontend/src/components/Purchase/WorkflowStatus.tsx`
+  **核心改进**：
+  - 增强tooltip信息，显示详细状态和当前步骤信息
+  - 改进视觉设计，提供更好的颜色搭配和布局层次
+  - 添加更具描述性的步骤状态指示器（已完成、进行中、等待中等）
+
+  #### 3. 工作流历史记录可视化 (Step 3)
+  **实现位置**：`frontend/src/components/Purchase/WorkflowHistory.tsx`
+  **关键特性**：
+  - 创建完整的时间线显示组件，直观展现工作流进展
+  - 显示详细操作信息：操作员、角色、时间戳、操作备注
+  - 实现可展开的详情，显示审批备注和询价信息
+  - 设计浮动卡片界面，从详情模态框通过"工作流历史"按钮切换
+  - 完整集成到SimplePurchaseDetail页面
+
+  #### 4. 综合测试数据框架 (Step 4)
+  **实现位置**：`/home/ubuntu/shenyuan-erp/create_api_test_data.py`
+  **测试覆盖**：
+  - 涵盖所有工作流状态（draft, submitted, price_quoted, dept_approved, final_approved, rejected）
+  - 提供API-based和database-based两种测试数据创建方案
+  - 包含不同项目、不同用户角色的完整测试场景
+
+  ### 技术难题解决记录
+
+  #### 问题1：TypeScript类型定义错误
+  **错误现象**：`TS7053: Element implicitly has an 'any' type because expression of type 'string'`
+  **根本原因**：对象键类型定义不完整，TypeScript无法推断string索引访问
+  **解决方案**：添加索引签名 `const stepNames: { [key: string]: string } = {...}`
+
+  #### 问题2：函数参数类型推断错误
+  **错误现象**：`Parameter 'sum' implicitly has an 'any' type`
+  **解决方案**：明确标注函数参数类型 `(sum: number, item: any) => ...`
+
+  ### 系统功能验证和成果
+
+  #### 完整功能清单 ✅
+  - **工作流状态可视化**：直观的标签和步骤显示，支持tooltip详情
+  - **工作流历史记录**：完整的时间线展示，包含操作详情和审批信息
+  - **API调用标准化**：统一的认证和错误处理机制
+  - **TypeScript类型安全**：完整的类型定义，无编译错误
+  - **用户权限控制**：不同角色看到相应的操作权限和按钮
+  - **响应式界面设计**：浮动卡片、可切换显示等现代UI元素
+
+  #### 技术指标确认
+  - ✅ **前端编译通过**：0个TypeScript错误，类型安全完整
+  - ✅ **API集成完成**：统一api服务，认证token自动处理
+  - ✅ **组件功能完备**：WorkflowStatus和WorkflowHistory组件功能完整
+  - ✅ **用户界面友好**：现代化的UI设计，直观的交互体验
+
+  ### 当前系统状态总结
+
+  #### 申购单工作流管理功能现已完全实现 🎉
+  - ✅ **完整的工作流状态管理**：支持draft→submitted→price_quoted→dept_approved→final_approved流程
+  - ✅ **直观的状态可视化**：WorkflowStatus组件提供丰富的状态信息和tooltip
+  - ✅ **详细的历史记录追踪**：WorkflowHistory组件展示完整的操作时间线
+  - ✅ **权限控制完善**：不同角色用户看到相应的操作按钮和信息
+  - ✅ **API调用标准化**：统一认证处理，错误处理机制完善
+  - ✅ **类型安全保障**：完整的TypeScript类型定义，编译零错误
+
+  #### 用户可测试功能
+  1. **工作流状态显示**：查看申购单的当前状态和步骤信息
+  2. **工作流历史记录**：点击"工作流历史"按钮查看详细操作记录
+  3. **角色权限测试**：使用不同角色账号登录测试权限边界
+  4. **工作流操作流程**：执行提交、询价、审批等完整工作流操作
+
+  **访问地址**：http://localhost:3000 或 http://18.219.25.24:3000
+
+  ## 申购单编辑页面系统分类显示问题系统性修复记录 (2025-08-19)
+
+  ### 问题发现和用户反馈
+  **用户症状**：编辑现有申购单时，所属系统列显示横杠（-）而不是具体的系统名称
+  **影响范围**：历史申购单数据无法正确显示系统分类信息
+  **用户期望**：编辑页面应该能正确显示和选择系统分类
+
+  ### 系统性调试方法论
+
+  #### 第一阶段：问题定位策略
+  **分层诊断思维**：
+  ```
+  表象问题：前端显示横杠
+       ↓
+  可能原因：前端逻辑 vs 数据问题 vs API问题
+       ↓
+  系统性排查：后端API → 数据库数据 → 前端转换 → UI渲染
+  ```
+
+  **调试工具链组合**：
+  ```bash
+  # 1. 后端API验证
+  TOKEN=$(curl -s -X POST "http://localhost:8000/api/v1/auth/login" \
+    -d "username=admin&password=admin123" | jq -r '.access_token')
+  curl -s "http://localhost:8000/api/v1/purchases/22" \
+    -H "Authorization: Bearer $TOKEN" | jq '.items[0] | {system_category_id, system_category_name}'
+
+  # 2. 前端debug日志
+  console.log('[申购单编辑] 系统分类数据:', {
+    system_category_id: item.system_category_id,
+    system_category_name: item.system_category_name
+  });
+  ```
+
+  #### 第二阶段：根本原因发现
+  **关键突破**：用户检查浏览器console发现
+  ```
+  system_category_id=undefined, system_category_name=null，条件结果=false
+  ```
+
+  **API验证结果**：
+  ```json
+  // 历史申购单数据
+  {
+    "system_category_id": null,
+    "system_category_name": null,
+    "item_name": "网络摄像机"
+  }
+
+  // 新申购单数据  
+  {
+    "system_category_id": 1,
+    "system_category_name": "视频监控",
+    "item_name": "网络摄像机"
+  }
+  ```
+
+  **根本原因确认**：
+  1. **历史数据缺失**：数据库中老申购单的 `system_category_id` 字段为 `null`
+  2. **新功能正常**：系统分类功能完全正常，新建申购单能正确保存和显示
+  3. **前端逻辑正确**：API返回null时前端正确显示横杠
+
+  ### 根本性修复方案设计
+
+  #### 修复策略选择
+  **方案对比**：
+  1. ❌ **数据库批量修复**：风险高，影响历史数据完整性
+  2. ❌ **强制智能推荐**：可能推荐错误，用户无法控制
+  3. ✅ **前端增强选择**：安全、灵活、用户友好
+
+  **选择理由**：
+  - 保持历史数据完整性
+  - 给用户选择权和灵活性
+  - 支持渐进式数据改善
+  - 不影响现有工作流程
+
+  #### 核心技术实现
+
+  **1. 为所有明细项加载系统分类选择器**
+  ```typescript
+  // 修复前：只有主材有系统分类选择器
+  if (item.item_type === 'main' && item.item_name) {
+    // 只为主材加载系统分类
+  }
+
+  // 修复后：所有明细项都有系统分类选择器
+  const projectId = purchaseData.project_id;
+  getAllSystemCategoriesByProject(projectId).then(allCategories => {
+    setItems(prevItems => prevItems.map(prevItem => ({
+      ...prevItem,
+      availableSystemCategories: allCategories  // 所有物料都可选择
+    })));
+  });
+  ```
+
+  **2. 增强API响应格式处理**
+  ```typescript
+  const getAllSystemCategoriesByProject = async (projectId: number) => {
+    const response = await api.get(`purchases/system-categories/by-project/${projectId}`);
+    const data = response.data;
+    // 处理不同API响应格式
+    if (Array.isArray(data)) {
+      return data;  // 直接数组格式
+    } else if (data && Array.isArray(data.categories)) {
+      return data.categories;  // 对象包含categories字段
+    } else {
+      return [];  // 兜底空数组
+    }
+  };
+  ```
+
+  **3. 优化UI渲染逻辑**
+  ```typescript
+  // 修复前：有系统分类才显示，否则显示横杠
+  if (record.system_category_name) {
+    return <span>{record.system_category_name}</span>;
+  }
+  return <span>-</span>;
+
+  // 修复后：优先显示选择器，支持手动选择
+  if (Array.isArray(record.availableSystemCategories) && record.availableSystemCategories.length > 0) {
+    return (
+      <Select
+        value={value}
+        placeholder={record.system_category_name || "选择系统"}
+        onChange={(categoryId) => {
+          // 同步更新ID和名称
+          const selectedCategory = record.availableSystemCategories.find(cat => cat.id === categoryId);
+          if (selectedCategory) {
+            setItems(items => items.map(item => 
+              item.id === record.id ? {
+                ...item,
+                system_category_id: categoryId,
+                system_category_name: selectedCategory.category_name
+              } : item
+            ));
+          }
+        }}
+      >
+        {record.availableSystemCategories.map(cat => (
+          <Select.Option key={cat.id} value={cat.id}>
+            {cat.is_suggested ? '⭐ ' : ''}{cat.category_name}
+          </Select.Option>
+        ))}
+      </Select>
+    );
+  }
+  ```
+
+  ### 技术难题解决记录
+
+  #### 难题1：TypeScript类型推断错误
+  **错误现象**：`Parameter 'suggestedCat' implicitly has an 'any' type`
+  **解决方案**：
+  ```typescript
+  // 修复前：类型推断失败
+  categoryResponse.categories?.some(suggestedCat => suggestedCat.id === cat.id)
+
+  // 修复后：明确类型注解
+  categoryResponse.categories?.some((suggestedCat: SystemCategory) => suggestedCat.id === cat.id)
+  ```
+
+  #### 难题2：数组类型运行时错误  
+  **错误现象**：`_prevItem$availableSy.map is not a function`
+  **根本原因**：`availableSystemCategories` 字段在某些情况下不是数组类型
+  **解决方案**：全面的数组类型检查
+  ```typescript
+  // 修复前：直接调用map可能出错
+  prevItem.availableSystemCategories?.map(...)
+
+  // 修复后：严格类型检查
+  Array.isArray(prevItem.availableSystemCategories) 
+    ? prevItem.availableSystemCategories.map(...)
+    : categoryResponse.categories || []
+
+  // 渲染逻辑保护
+  if (Array.isArray(record.availableSystemCategories) && record.availableSystemCategories.length > 0)
+
+  // 回调函数保护
+  const selectedCategory = Array.isArray(record.availableSystemCategories) 
+    ? record.availableSystemCategories.find(cat => cat.id === categoryId)
+    : null;
+  ```
+
+  ### 智能推荐功能保持
+
+  #### 核心设计理念
+  **智能推荐 + 手动选择的完美结合**：
+  1. **新申购单**：保持智能推荐功能（⭐标记推荐项）
+  2. **历史数据**：提供手动选择功能补全数据
+  3. **用户选择权**：可以覆盖智能推荐选择其他分类
+  4. **渐进式改善**：历史数据质量逐步提升
+
+  #### 智能推荐逻辑完整保留
+  ```typescript
+  // 主材智能推荐逻辑完全不变
+  if (item.item_type === 'main' && item.item_name) {
+    const [specResponse, categoryResponse] = await Promise.all([
+      getSpecificationsByMaterial(projectId, item.item_name),
+      getSystemCategoriesByMaterial(projectId, item.item_name)  // 智能推荐API
+    ]);
+    
+    // 标记智能推荐的系统分类
+    availableSystemCategories: prevItem.availableSystemCategories?.map(cat => ({
+      ...cat,
+      is_suggested: categoryResponse.categories?.some(suggestedCat => suggestedCat.id === cat.id)
+    }))
+  }
+  ```
+
+  ### 修复验证和成果
+
+  #### 功能状态确认 ✅
+  - ✅ **新申购单正常**：申购单62 - `system_category_id: 1`, `system_category_name: "视频监控"`
+  - ✅ **历史数据识别**：历史申购单 - `system_category_id: null`, 现在可手动选择
+  - ✅ **系统分类API正常**：项目2有3个系统分类可供选择
+  - ✅ **前端编译成功**：0个TypeScript错误，0个运行时错误
+  - ✅ **数组类型安全**：所有数组操作都有类型检查保护
+
+  #### 用户体验改善 ✅
+  1. **编辑历史申购单**：在'所属系统'列现在显示下拉选择器而非横杠
+  2. **手动选择系统分类**：用户可以为历史数据选择适当的系统分类并保存
+  3. **智能推荐保持**：新申购单仍然有智能推荐(⭐标记)功能
+  4. **数据一致性**：选择后的系统分类会正确保存到数据库
+  5. **类型错误消除**：页面加载和操作过程完全流畅
+
+  ### 调试经验和方法论总结
+
+  #### 高效调试技能进阶
+  1. **分层诊断思维**：
+     - 表象问题 → 直接原因 → 根本原因 → 系统原因
+     - 后端数据 → API接口 → 前端转换 → UI渲染
+  
+  2. **工具链组合使用**：
+     - **后端验证**：curl + jq 快速API测试
+     - **前端调试**：console.log + React DevTools
+     - **数据库检查**：直接SQL查询验证数据完整性
+     - **类型检查**：TypeScript编译器 + 运行时检查
+
+  3. **用户反馈重要性**：
+     - 用户console检查发现了关键线索
+     - 用户的具体描述帮助快速定位问题范围
+     - 及时的用户验证确保修复效果
+
+  #### 代码质量保障
+  1. **类型安全优先**：
+     - 所有数组操作使用 `Array.isArray()` 检查
+     - TypeScript参数显式类型注解
+     - API响应格式兼容性处理
+
+  2. **防御性编程**：
+     - 多重兜底机制（空数组、null检查、默认值）
+     - 渐进式功能加载（先显示基础功能，再加载高级功能）
+     - 向后兼容设计（不影响现有工作流程）
+
+  3. **用户体验设计**：
+     - 智能推荐 + 手动选择的混合模式
+     - 渐进式数据完善策略
+     - 清晰的UI状态指示（⭐推荐标记）
+
+  ### 当前状态和未来规划
+
+  #### 当前状态总结 🎉
+  **申购单编辑页面系统分类显示问题已完全解决！**
+
+  用户现在可以：
+  - ✅ 编辑任何申购单（新的或历史的）并看到系统分类选择器
+  - ✅ 为历史申购单手动选择适当的系统分类
+  - ✅ 享受主材的智能推荐功能（⭐标记）
+  - ✅ 保存修改后的系统分类到数据库
+  - ✅ 获得完全流畅的编辑体验，无任何技术错误
+
+  #### 未来优化空间
+  当合同清单模块进一步完善后，可以考虑：
+  1. **更精准的智能推荐**：基于项目历史数据的推荐算法优化
+  2. **批量数据修复工具**：为历史数据提供批量系统分类功能
+  3. **数据质量监控**：系统分类完整性的监控和报告机制
+  4. **用户体验优化**：推荐置信度显示、更智能的默认选择逻辑
+
+  这是一个**系统性的根本修复**，既解决了当前问题，又为未来功能扩展奠定了坚实基础。
