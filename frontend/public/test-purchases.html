@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>申购单数据测试</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .result { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>申购单数据测试</h1>
+    
+    <button onclick="testAuth()">1. 测试登录</button>
+    <button onclick="testPurchases()">2. 测试申购单数据</button>
+    <button onclick="clearStorage()">清理缓存</button>
+    
+    <div id="result"></div>
+    <div id="dataTable"></div>
+
+    <script>
+        function showResult(message, success = false) {
+            const div = document.getElementById('result');
+            div.innerHTML = message;
+            div.className = 'result ' + (success ? 'success' : 'error');
+        }
+        
+        function testAuth() {
+            const token = localStorage.getItem('access_token');
+            const user = localStorage.getItem('currentUser');
+            
+            if (token && user) {
+                const userData = JSON.parse(user);
+                showResult(`✅ 已登录: ${userData.name} (${userData.role})`, true);
+            } else {
+                showResult('❌ 未登录，请先登录系统', false);
+            }
+        }
+        
+        async function testPurchases() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                showResult('❌ 请先登录', false);
+                return;
+            }
+            
+            showResult('正在获取申购单数据...');
+            
+            try {
+                const response = await fetch('/api/v1/purchases/', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult(`✅ 获取成功: 共${data.total}条申购单，当前页${data.items.length}条`, true);
+                    
+                    // 显示申购单表格
+                    displayPurchases(data.items);
+                } else {
+                    const error = await response.text();
+                    showResult(`❌ 获取失败: HTTP ${response.status} - ${error}`, false);
+                }
+            } catch (error) {
+                showResult(`❌ 网络错误: ${error.message}`, false);
+            }
+        }
+        
+        function displayPurchases(purchases) {
+            const tableDiv = document.getElementById('dataTable');
+            
+            if (purchases.length === 0) {
+                tableDiv.innerHTML = '<p>没有申购单数据</p>';
+                return;
+            }
+            
+            let html = `
+                <h3>申购单列表 (${purchases.length}条)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>申购单号</th>
+                            <th>项目</th>
+                            <th>申请人</th>
+                            <th>状态</th>
+                            <th>申请日期</th>
+                            <th>物料数量</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            purchases.forEach(purchase => {
+                html += `
+                    <tr>
+                        <td>${purchase.request_code}</td>
+                        <td>${purchase.project_name || '未知项目'}</td>
+                        <td>${purchase.requester_name || '未知'}</td>
+                        <td>${purchase.status}</td>
+                        <td>${new Date(purchase.request_date).toLocaleString()}</td>
+                        <td>${purchase.items ? purchase.items.length : 0}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            tableDiv.innerHTML = html;
+        }
+        
+        function clearStorage() {
+            localStorage.clear();
+            sessionStorage.clear();
+            showResult('存储已清理');
+            document.getElementById('dataTable').innerHTML = '';
+        }
+        
+        // 页面加载时自动检查
+        window.onload = function() {
+            testAuth();
+        };
+    </script>
+</body>
+</html>

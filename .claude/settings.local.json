@@ -48,7 +48,10 @@
       "Bash(sudo apt install:*)",
       "Bash(./scripts/check-erp.sh:*)",
       "Bash(npx tsc:*)",
-      "Bash(npm start)"
+      "Bash(npm start)",
+      "Bash(npm ls:*)",
+      "Bash(PORT=3000 HOST=0.0.0.0 npm start)",
+      "Bash(sqlite3:*)"
     ],
     "deny": []
   }

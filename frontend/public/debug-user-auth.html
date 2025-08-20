@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>用户认证调试</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .result { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        .warning { background: #fff3cd; }
+        pre { background: #f8f9fa; padding: 10px; overflow-x: auto; }
+        button { margin: 5px; padding: 8px 16px; }
+    </style>
+</head>
+<body>
+    <h1>用户认证和权限调试</h1>
+    
+    <div>
+        <h3>测试项目经理账号</h3>
+        <button onclick="testUser('project_manager', 'project_manager123')">标准项目经理账号</button>
+        <button onclick="testUser('pm', 'pm123')">PM账号</button>
+        <button onclick="testUser('manager', 'manager123')">Manager账号</button>
+        <button onclick="testUser('wangpm', 'wang123')">王项目经理账号</button>
+    </div>
+    
+    <div>
+        <h3>当前登录状态检查</h3>
+        <button onclick="checkCurrentAuth()">检查当前登录</button>
+        <button onclick="testCurrentPurchases()">测试当前用户申购单</button>
+        <button onclick="createTestPurchase()">创建测试申购单</button>
+    </div>
+    
+    <div id="result"></div>
+
+    <script>
+        function showResult(title, content, type = 'info') {
+            const div = document.getElementById('result');
+            const resultClass = type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning';
+            div.innerHTML = `
+                <div class="result ${resultClass}">
+                    <h3>${title}</h3>
+                    <pre>${typeof content === 'object' ? JSON.stringify(content, null, 2) : content}</pre>
+                </div>
+            `;
+        }
+        
+        async function testUser(username, password) {
+            try {
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `username=${username}&password=${password}`
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult(`登录成功: ${username}`, {
+                        用户ID: data.user.id,
+                        用户名: data.user.username,
+                        显示名: data.user.name,
+                        角色: data.user.role,
+                        token: data.access_token.substring(0, 20) + '...'
+                    }, 'success');
+                    
+                    // 自动测试该用户的申购单
+                    setTimeout(() => testPurchasesForUser(data.access_token, data.user), 1000);
+                } else {
+                    const error = await response.text();
+                    showResult(`登录失败: ${username}`, `HTTP ${response.status}: ${error}`, 'error');
+                }
+            } catch (error) {
+                showResult(`网络错误: ${username}`, error.message, 'error');
+            }
+        }
+        
+        async function testPurchasesForUser(token, user) {
+            try {
+                const response = await fetch('/api/v1/purchases/?page=1&size=10', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult(`${user.name} 的申购单`, {
+                        角色: user.role,
+                        总申购单数: data.total,
+                        可见申购单: data.items ? data.items.length : 0,
+                        申购单列表: data.items ? data.items.map(item => ({
+                            申购单号: item.request_code,
+                            创建者: item.requester_name,
+                            创建者ID: item.requester_id,
+                            是否匹配: item.requester_id === user.id ? '✅' : '❌'
+                        })) : []
+                    }, data.total > 0 ? 'success' : 'warning');
+                } else {
+                    showResult(`${user.name} 申购单查询失败`, `HTTP ${response.status}`, 'error');
+                }
+            } catch (error) {
+                showResult(`${user.name} 申购单查询错误`, error.message, 'error');
+            }
+        }
+        
+        function checkCurrentAuth() {
+            const token = localStorage.getItem('access_token');
+            const user = localStorage.getItem('currentUser');
+            
+            if (token && user) {
+                const userData = JSON.parse(user);
+                showResult('当前浏览器登录状态', {
+                    用户ID: userData.id,
+                    用户名: userData.username,
+                    显示名: userData.name,
+                    角色: userData.role,
+                    token: token.substring(0, 20) + '...'
+                }, 'success');
+            } else {
+                showResult('当前浏览器登录状态', '未登录', 'error');
+            }
+        }
+        
+        async function testCurrentPurchases() {
+            const token = localStorage.getItem('access_token');
+            const user = localStorage.getItem('currentUser');
+            
+            if (!token || !user) {
+                showResult('错误', '请先在主应用中登录', 'error');
+                return;
+            }
+            
+            const userData = JSON.parse(user);
+            await testPurchasesForUser(token, userData);
+        }
+        
+        async function createTestPurchase() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                showResult('错误', '请先登录', 'error');
+                return;
+            }
+            
+            const testData = {
+                project_id: 2,
+                remarks: "测试申购单 - 权限调试",
+                items: [{
+                    contract_item_id: 1,
+                    item_name: "测试物料",
+                    specification: "测试规格",
+                    brand: "测试品牌",
+                    unit: "个",
+                    quantity: 1,
+                    item_type: "main",
+                    remarks: "测试备注"
+                }]
+            };
+            
+            try {
+                const response = await fetch('/api/v1/purchases/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testData)
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult('创建申购单成功', {
+                        申购单号: data.request_code,
+                        申购单ID: data.id,
+                        状态: data.status
+                    }, 'success');
+                } else {
+                    const error = await response.text();
+                    showResult('创建申购单失败', `HTTP ${response.status}: ${error}`, 'error');
+                }
+            } catch (error) {
+                showResult('创建申购单错误', error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>系统分类智能选择测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        button { margin: 5px; padding: 8px 16px; background: #1890ff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #40a9ff; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        pre { background: #f5f5f5; padding: 10px; overflow: auto; max-height: 300px; }
+        select, input { margin: 5px; padding: 5px; }
+    </style>
+</head>
+<body>
+    <h1>系统分类智能选择功能测试</h1>
+    
+    <div class="test-section">
+        <h3>1. 登录测试</h3>
+        <button onclick="loginAsAdmin()">登录管理员</button>
+        <div id="loginResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. 获取项目系统分类</h3>
+        <select id="projectSelect">
+            <option value="">选择项目</option>
+            <option value="2">体育局项目</option>
+        </select>
+        <button onclick="getProjectSystems()">获取系统分类</button>
+        <div id="systemsResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. 测试物料系统分类智能选择</h3>
+        <div>
+            <label>项目ID: </label>
+            <input type="number" id="materialProjectId" value="2" style="width: 60px;">
+            <label>物料名称: </label>
+            <input type="text" id="materialName" placeholder="输入物料名称" style="width: 200px;">
+            <button onclick="testMaterialSystem()">测试智能选择</button>
+        </div>
+        <div style="margin: 10px 0;">
+            <strong>常用测试物料：</strong>
+            <button onclick="testPresetMaterial('室外人脸抓拍枪式摄像机(含镜头、护罩等)')">摄像机</button>
+            <button onclick="testPresetMaterial('网络硬盘录像机')">录像机</button>
+            <button onclick="testPresetMaterial('不存在的物料')">不存在物料</button>
+        </div>
+        <div id="materialResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>4. 创建申购单测试</h3>
+        <p>测试完整的申购单创建流程，包含系统分类：</p>
+        <button onclick="createTestPurchaseRequest()">创建测试申购单</button>
+        <div id="createResult"></div>
+    </div>
+
+    <script>
+        let currentToken = null;
+
+        async function loginAsAdmin() {
+            const resultDiv = document.getElementById('loginResult');
+            try {
+                const formData = new FormData();
+                formData.append('username', 'admin');
+                formData.append('password', 'admin123');
+
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    currentToken = data.access_token;
+                    resultDiv.innerHTML = `<div class="success">✅ 登录成功: ${data.user.name} (${data.user.role})</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ 登录失败</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 登录错误: ${error}</div>`;
+            }
+        }
+
+        async function getProjectSystems() {
+            const resultDiv = document.getElementById('systemsResult');
+            const projectId = document.getElementById('projectSelect').value;
+            
+            if (!currentToken) {
+                resultDiv.innerHTML = '<div class="error">❌ 请先登录</div>';
+                return;
+            }
+
+            if (!projectId) {
+                resultDiv.innerHTML = '<div class="error">❌ 请选择项目</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/v1/purchases/system-categories/by-project/${projectId}`, {
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    let html = `<div class="success">✅ 项目${projectId}共有 ${data.categories.length} 个系统分类</div>`;
+                    html += '<div class="info">系统分类列表:</div>';
+                    data.categories.forEach(cat => {
+                        html += `<div>- ${cat.category_name} (ID: ${cat.id}, 物料数: ${cat.total_items_count})</div>`;
+                    });
+                    html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ 获取失败: ${response.status}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 网络错误: ${error}</div>`;
+            }
+        }
+
+        async function testMaterialSystem() {
+            const projectId = document.getElementById('materialProjectId').value;
+            const materialName = document.getElementById('materialName').value.trim();
+            const resultDiv = document.getElementById('materialResult');
+
+            if (!currentToken) {
+                resultDiv.innerHTML = '<div class="error">❌ 请先登录</div>';
+                return;
+            }
+
+            if (!projectId || !materialName) {
+                resultDiv.innerHTML = '<div class="error">❌ 请输入项目ID和物料名称</div>';
+                return;
+            }
+
+            try {
+                const params = new URLSearchParams({
+                    project_id: projectId,
+                    material_name: materialName
+                });
+
+                const response = await fetch(`/api/v1/purchases/system-categories/by-material?${params}`, {
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    let html = `<div class="success">✅ 智能分析结果</div>`;
+                    html += `<div class="info"><strong>物料：</strong>${data.material_name}</div>`;
+                    html += `<div class="info"><strong>分析结果：</strong>${data.message}</div>`;
+                    
+                    if (data.auto_selected && data.selected_system) {
+                        html += `<div class="success"><strong>自动选择系统：</strong>${data.selected_system.category_name}</div>`;
+                    } else if (data.available_systems && data.available_systems.length > 0) {
+                        html += `<div class="info"><strong>可选系统 (${data.available_systems.length}个)：</strong></div>`;
+                        data.available_systems.forEach(sys => {
+                            const badge = sys.is_suggested ? ' [建议]' : '';
+                            html += `<div>- ${sys.category_name}${badge}</div>`;
+                        });
+                    }
+                    
+                    html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ 请求失败: ${response.status}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 网络错误: ${error}</div>`;
+            }
+        }
+
+        function testPresetMaterial(materialName) {
+            document.getElementById('materialName').value = materialName;
+            testMaterialSystem();
+        }
+
+        async function createTestPurchaseRequest() {
+            const resultDiv = document.getElementById('createResult');
+            
+            if (!currentToken) {
+                resultDiv.innerHTML = '<div class="error">❌ 请先登录</div>';
+                return;
+            }
+
+            try {
+                // 构造测试申购单数据
+                const requestData = {
+                    project_id: 2,
+                    required_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7天后
+                    remarks: '系统分类功能测试申购单',
+                    items: [
+                        {
+                            contract_item_id: null,
+                            system_category_id: 5, // 视频监控系统
+                            item_name: '室外人脸抓拍枪式摄像机(含镜头、护罩等)',
+                            specification: '测试规格',
+                            brand: '测试品牌',
+                            unit: '台',
+                            quantity: 2,
+                            item_type: 'main',
+                            remarks: '主材自动选择系统测试'
+                        },
+                        {
+                            contract_item_id: null,
+                            system_category_id: 6, // 出入口控制系统
+                            item_name: '辅助材料测试',
+                            specification: '辅材规格',
+                            brand: '辅材品牌',
+                            unit: '个',
+                            quantity: 5,
+                            item_type: 'auxiliary',
+                            remarks: '辅材手动选择系统测试'
+                        }
+                    ]
+                };
+
+                const response = await fetch('/api/v1/purchases/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    let html = `<div class="success">✅ 申购单创建成功</div>`;
+                    html += `<div class="info"><strong>申购单号：</strong>${data.request_code}</div>`;
+                    html += `<div class="info"><strong>申购单ID：</strong>${data.id}</div>`;
+                    html += `<div class="info"><strong>明细数量：</strong>${data.items.length}</div>`;
+                    
+                    data.items.forEach((item, index) => {
+                        html += `<div><strong>明细${index + 1}：</strong>${item.item_name} - 系统ID: ${item.system_category_id}</div>`;
+                    });
+                    
+                    html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    resultDiv.innerHTML = html;
+                } else {
+                    const errorData = await response.json();
+                    resultDiv.innerHTML = `<div class="error">❌ 创建失败: ${errorData.detail || response.statusText}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 网络错误: ${error}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

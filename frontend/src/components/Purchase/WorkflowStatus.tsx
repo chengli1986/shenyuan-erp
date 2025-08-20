@@ -119,15 +119,37 @@ const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const config = statusConfig[status];
   
   if (!showSteps) {
-    // 简单标签显示
+    // 简单标签显示 - 增强版本
+    const tooltipTitle = (
+      <div>
+        <div><strong>状态:</strong> {config.text}</div>
+        {currentStep && (
+          <div><strong>当前步骤:</strong> {stepConfig[currentStep]?.title}</div>
+        )}
+        <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
+          点击查看详细工作流程
+        </div>
+      </div>
+    );
+
     return (
-      <Tooltip title={`状态: ${config.text}${currentStep ? ` | 当前步骤: ${stepConfig[currentStep]?.title}` : ''}`}>
+      <Tooltip title={tooltipTitle} overlayStyle={{ maxWidth: '200px' }}>
         <Tag 
           color={config.color} 
           icon={config.icon}
-          style={{ margin: 0 }}
+          style={{ 
+            margin: 0,
+            cursor: 'pointer',
+            fontSize: size === 'small' ? '12px' : '13px',
+            padding: size === 'small' ? '2px 6px' : '4px 8px'
+          }}
         >
           {config.text}
+          {currentStep && status !== 'draft' && (
+            <span style={{ marginLeft: '4px', opacity: 0.7 }}>
+              · {stepConfig[currentStep]?.title}
+            </span>
+          )}
         </Tag>
       </Tooltip>
     );
@@ -137,31 +159,61 @@ const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const stepIndex = getStepIndex(status, currentStep);
   const isError = status === 'rejected' || status === 'cancelled';
   
-  const steps = Object.entries(stepConfig).map(([key, stepConf], index) => ({
-    title: stepConf.title,
-    icon: stepConf.icon,
-    status: (isError ? 'error' : 
-            index < stepIndex ? 'finish' : 
-            index === stepIndex ? 'process' : 'wait') as 'error' | 'finish' | 'process' | 'wait'
-  }));
+  const steps = Object.entries(stepConfig).map(([key, stepConf], index) => {
+    let stepStatus: 'wait' | 'process' | 'finish' | 'error' = 'wait';
+    let description = '';
+    
+    if (isError) {
+      stepStatus = index <= stepIndex ? 'error' : 'wait';
+      description = index <= stepIndex ? '已终止' : '未执行';
+    } else {
+      if (index < stepIndex) {
+        stepStatus = 'finish';
+        description = '已完成';
+      } else if (index === stepIndex) {
+        stepStatus = 'process';
+        description = '进行中';
+      } else {
+        stepStatus = 'wait';
+        description = '等待中';
+      }
+    }
+    
+    return {
+      title: stepConf.title,
+      description: description,
+      icon: stepConf.icon,
+      status: stepStatus
+    };
+  });
   
   return (
     <div style={{ width: '100%' }}>
-      <Space direction="vertical" style={{ width: '100%' }}>
-        <Tag 
-          color={config.color} 
-          icon={config.icon}
-          style={{ marginBottom: 8 }}
-        >
-          {config.text}
-        </Tag>
-        <Steps
-          size={size === 'small' ? 'small' : 'default'}
-          current={stepIndex}
-          status={isError ? 'error' : 'process'}
-          items={steps}
-          style={{ width: '100%' }}
-        />
+      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Tag color={config.color} icon={config.icon} style={{ fontSize: '13px' }}>
+            {config.text}
+          </Tag>
+          {currentStep && (
+            <Tag color="blue" style={{ fontSize: '12px' }}>
+              当前: {stepConfig[currentStep]?.title}
+            </Tag>
+          )}
+        </div>
+        <div style={{ 
+          background: '#fafafa', 
+          padding: '16px', 
+          borderRadius: '8px',
+          border: '1px solid #f0f0f0'
+        }}>
+          <Steps
+            size={size === 'small' ? 'small' : 'default'}
+            current={stepIndex}
+            status={isError ? 'error' : 'process'}
+            items={steps}
+            style={{ width: '100%' }}
+          />
+        </div>
       </Space>
     </div>
   );

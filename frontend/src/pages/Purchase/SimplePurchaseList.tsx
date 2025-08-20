@@ -9,10 +9,11 @@ import {
   Modal,
   Popconfirm
 } from 'antd';
-import { PlusOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { ColumnsType } from 'antd/es/table';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SimplePurchaseDetail from './SimplePurchaseDetail';
+import PurchaseEditForm from './PurchaseEditForm';
 import WorkflowStatus, { PurchaseStatus, WorkflowStep } from '../../components/Purchase/WorkflowStatus';
 import api from '../../services/api';
 
@@ -45,6 +46,9 @@ const SimplePurchaseList: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [editVisible, setEditVisible] = useState(false);
+  const [currentEdit, setCurrentEdit] = useState<SimplePurchaseRequest | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
 
   // 加载申购单列表 - 支持分页
   const loadPurchaseRequests = useCallback(async (page = currentPage, size = pageSize, showMessage = false) => {
@@ -189,6 +193,41 @@ const SimplePurchaseList: React.FC = () => {
     }
   };
 
+  // 编辑申购单
+  const editPurchaseRequest = async (record: SimplePurchaseRequest) => {
+    setEditLoading(true);
+    try {
+      const response = await api.get(`purchases/${record.id}`);
+      const detail = response.data;
+      setCurrentEdit(detail);
+      setEditVisible(true);
+    } catch (error: any) {
+      console.error('获取申购单详情失败:', error);
+      if (error.response?.data?.detail) {
+        message.error(`获取详情失败: ${error.response.data.detail}`);
+      } else {
+        message.error('获取申购单详情失败');
+      }
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  // 保存编辑
+  const handleEditSave = async (editData: any) => {
+    if (!currentEdit) return;
+    
+    try {
+      await api.put(`purchases/${currentEdit.id}`, editData);
+      await loadPurchaseRequests(currentPage, pageSize);
+      setEditVisible(false);
+      setCurrentEdit(null);
+    } catch (error: any) {
+      console.error('更新申购单失败:', error);
+      throw error; // 让编辑组件处理错误显示
+    }
+  };
+
   // 行选择配置
   const rowSelection = {
     selectedRowKeys,
@@ -269,6 +308,17 @@ const SimplePurchaseList: React.FC = () => {
           >
             查看
           </Button>
+          {record.status === 'draft' && (
+            <Button 
+              type="text" 
+              icon={<EditOutlined />} 
+              size="small"
+              onClick={() => editPurchaseRequest(record)}
+              loading={editLoading}
+            >
+              编辑
+            </Button>
+          )}
           {record.status === 'draft' && (
             <Popconfirm
               title="删除确认"
@@ -423,6 +473,23 @@ const SimplePurchaseList: React.FC = () => {
         onRefresh={() => {
           loadPurchaseRequests(currentPage, pageSize);
         }}
+        onEdit={(purchaseData) => {
+          // 从详情页跳转到编辑页
+          setDetailVisible(false);
+          setCurrentDetail(null);
+          editPurchaseRequest(purchaseData);
+        }}
+      />
+
+      {/* 申购单编辑对话框 */}
+      <PurchaseEditForm
+        visible={editVisible}
+        purchaseData={currentEdit}
+        onCancel={() => {
+          setEditVisible(false);
+          setCurrentEdit(null);
+        }}
+        onSave={handleEditSave}
       />
     </div>
   );

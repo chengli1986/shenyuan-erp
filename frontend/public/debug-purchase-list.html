@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>申购单列表调试</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .result { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        .info { background: #d1ecf1; }
+        pre { background: #f8f9fa; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>申购单列表调试工具</h1>
+    
+    <button onclick="checkAuth()">1. 检查当前登录状态</button>
+    <button onclick="testPurchaseAPI()">2. 测试申购单API</button>
+    <button onclick="testCreateUser()">3. 查看创建者信息</button>
+    <button onclick="testAllPurchases()">4. 管理员视角查看所有申购单</button>
+    
+    <div id="result"></div>
+
+    <script>
+        function showResult(title, content, type = 'info') {
+            const div = document.getElementById('result');
+            div.innerHTML = `
+                <div class="result ${type}">
+                    <h3>${title}</h3>
+                    <pre>${typeof content === 'object' ? JSON.stringify(content, null, 2) : content}</pre>
+                </div>
+            `;
+        }
+        
+        function checkAuth() {
+            const token = localStorage.getItem('access_token');
+            const user = localStorage.getItem('currentUser');
+            
+            if (token && user) {
+                const userData = JSON.parse(user);
+                showResult('当前登录状态', {
+                    用户名: userData.username,
+                    显示名: userData.name, 
+                    角色: userData.role,
+                    用户ID: userData.id,
+                    token前缀: token.substring(0, 20) + '...'
+                }, 'success');
+            } else {
+                showResult('登录状态', '未登录，请先登录系统', 'error');
+            }
+        }
+        
+        async function testPurchaseAPI() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                showResult('错误', '请先登录', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/v1/purchases/?page=1&size=20', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult('申购单API响应', {
+                        总数: data.total,
+                        当前页数据: data.items ? data.items.length : 0,
+                        页码: data.page,
+                        页大小: data.size,
+                        最新申购单: data.items && data.items.length > 0 ? {
+                            申购单号: data.items[data.items.length - 1].request_code,
+                            状态: data.items[data.items.length - 1].status,
+                            申请人: data.items[data.items.length - 1].requester_name
+                        } : '无数据'
+                    }, 'success');
+                } else {
+                    const errorText = await response.text();
+                    showResult('API错误', `HTTP ${response.status}: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                showResult('网络错误', error.message, 'error');
+            }
+        }
+        
+        async function testCreateUser() {
+            // 检查最新申购单的创建者信息
+            const token = localStorage.getItem('access_token');
+            try {
+                const response = await fetch('/api/v1/purchases/19', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                    
+                    showResult('申购单创建者对比', {
+                        申购单ID: data.id,
+                        申购单号: data.request_code,
+                        创建者ID: data.requester_id,
+                        创建者名称: data.requester_name,
+                        当前登录用户ID: currentUser.id,
+                        当前登录用户: currentUser.name,
+                        是否匹配: data.requester_id === currentUser.id ? '✅ 匹配' : '❌ 不匹配'
+                    }, data.requester_id === currentUser.id ? 'success' : 'error');
+                }
+            } catch (error) {
+                showResult('检查失败', error.message, 'error');
+            }
+        }
+        
+        async function testAllPurchases() {
+            // 使用admin token查看所有申购单
+            try {
+                const adminResponse = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'username=admin&password=admin123'
+                });
+                
+                if (adminResponse.ok) {
+                    const adminAuth = await adminResponse.json();
+                    
+                    const purchasesResponse = await fetch('/api/v1/purchases/?page=1&size=20', {
+                        headers: {
+                            'Authorization': `Bearer ${adminAuth.access_token}`,
+                            'Content-Type': 'application/json',
+                        },
+                    });
+                    
+                    if (purchasesResponse.ok) {
+                        const data = await purchasesResponse.json();
+                        showResult('管理员视角 - 所有申购单', {
+                            总数: data.total,
+                            最新5条: data.items.slice(-5).map(item => ({
+                                申购单号: item.request_code,
+                                创建者: item.requester_name,
+                                状态: item.status,
+                                创建时间: new Date(item.created_at).toLocaleString()
+                            }))
+                        }, 'info');
+                    }
+                }
+            } catch (error) {
+                showResult('管理员测试失败', error.message, 'error');
+            }
+        }
+        
+        // 页面加载时自动检查
+        window.onload = function() {
+            checkAuth();
+        };
+    </script>
+</body>
+</html>

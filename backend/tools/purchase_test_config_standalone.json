@@ -1,0 +1,19 @@
+{
+  "purchase_tests_standalone": {
+    "enabled": true,
+    "script": "/home/ubuntu/shenyuan-erp/backend/tools/run_purchase_tests_standalone.py",
+    "description": "申购单独立测试套件",
+    "schedule": "daily",
+    "timeout": 600,
+    "categories": [
+      "business_rules",
+      "permissions",
+      "edit_page"
+    ],
+    "coverage": {
+      "intelligent_rules": "申购业务规则验证",
+      "permission_system": "多角色权限控制",
+      "edit_functionality": "历史数据编辑支持"
+    }
+  }
+}

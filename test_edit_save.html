@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试编辑保存功能</title>
+</head>
+<body>
+    <h2>申购单编辑保存功能测试</h2>
+    <button onclick="testLogin()">1. 登录测试</button>
+    <button onclick="testGetPurchase()">2. 获取申购单</button>
+    <button onclick="testEditSave()">3. 测试编辑保存</button>
+    <div id="result" style="margin-top: 20px; white-space: pre-wrap; font-family: monospace;"></div>
+
+    <script>
+        let token = '';
+        let purchaseId = '';
+
+        function log(message) {
+            document.getElementById('result').innerHTML += message + '\n';
+        }
+
+        async function testLogin() {
+            try {
+                log('=== 登录测试 ===');
+                const formData = new FormData();
+                formData.append('username', 'sunyun');
+                formData.append('password', 'sunyun123');
+
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    token = data.access_token;
+                    log(`✅ 登录成功: ${data.user.name}`);
+                    log(`Token: ${token.substring(0, 20)}...`);
+                } else {
+                    log(`❌ 登录失败: ${response.status}`);
+                }
+            } catch (error) {
+                log(`❌ 登录错误: ${error.message}`);
+            }
+        }
+
+        async function testGetPurchase() {
+            try {
+                log('\n=== 获取申购单列表 ===');
+                if (!token) {
+                    log('❌ 请先登录');
+                    return;
+                }
+
+                const response = await fetch('/api/v1/purchases/', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.items && data.items.length > 0) {
+                        purchaseId = data.items[0].id;
+                        log(`✅ 获取申购单成功，总数: ${data.total}`);
+                        log(`选择申购单ID: ${purchaseId} (${data.items[0].request_code})`);
+                        log(`状态: ${data.items[0].status}`);
+                    } else {
+                        log('❌ 没有申购单数据');
+                    }
+                } else {
+                    log(`❌ 获取申购单失败: ${response.status}`);
+                }
+            } catch (error) {
+                log(`❌ 获取申购单错误: ${error.message}`);
+            }
+        }
+
+        async function testEditSave() {
+            try {
+                log('\n=== 测试编辑保存 ===');
+                if (!token || !purchaseId) {
+                    log('❌ 请先登录并获取申购单');
+                    return;
+                }
+
+                // 1. 先获取申购单详情
+                log('1. 获取申购单详情...');
+                const getResponse = await fetch(`/api/v1/purchases/${purchaseId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!getResponse.ok) {
+                    log(`❌ 获取详情失败: ${getResponse.status}`);
+                    return;
+                }
+
+                const purchaseData = await getResponse.json();
+                log(`✅ 获取详情成功: ${purchaseData.request_code}`);
+                log(`明细数量: ${purchaseData.items ? purchaseData.items.length : 0}`);
+
+                // 2. 构造编辑数据
+                const editData = {
+                    required_date: purchaseData.required_date,
+                    remarks: (purchaseData.remarks || '') + ' [已编辑]',
+                    items: (purchaseData.items || []).map(item => ({
+                        contract_item_id: item.contract_item_id || null,
+                        system_category_id: item.system_category_id || null,
+                        item_name: item.item_name,
+                        specification: item.specification || null,
+                        brand: item.brand_model || item.brand || null,
+                        unit: item.unit,
+                        quantity: item.quantity,
+                        unit_price: item.unit_price || null,
+                        total_price: item.total_price || null,
+                        item_type: item.item_type || 'auxiliary',
+                        remarks: item.remarks || null
+                    }))
+                };
+
+                log('2. 发送编辑请求...');
+                log(`编辑数据: ${JSON.stringify(editData, null, 2).substring(0, 200)}...`);
+
+                // 3. 发送PUT请求
+                const putResponse = await fetch(`/api/v1/purchases/${purchaseId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(editData)
+                });
+
+                if (putResponse.ok) {
+                    const result = await putResponse.json();
+                    log(`✅ 编辑保存成功!`);
+                    log(`返回数据: ${JSON.stringify(result, null, 2).substring(0, 200)}...`);
+                } else {
+                    const errorText = await putResponse.text();
+                    log(`❌ 编辑保存失败: ${putResponse.status}`);
+                    log(`错误详情: ${errorText}`);
+                }
+
+            } catch (error) {
+                log(`❌ 编辑保存错误: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

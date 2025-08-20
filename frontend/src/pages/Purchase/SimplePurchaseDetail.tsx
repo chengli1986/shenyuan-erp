@@ -8,10 +8,6 @@ import {
   Button,
   Form,
   Input,
-  DatePicker,
-  Select,
-  InputNumber,
-  Divider,
   message
 } from 'antd';
 import { 
@@ -20,27 +16,39 @@ import {
   SendOutlined,
   DollarOutlined,
   CrownOutlined,
-  EditOutlined
+  EditOutlined,
+  HistoryOutlined
 } from '@ant-design/icons';
-import { formatPurchaseStatus, formatItemType } from '../../services/purchase';
+import { formatItemType } from '../../services/purchase';
 import WorkflowStatus, { PurchaseStatus, WorkflowStep } from '../../components/Purchase/WorkflowStatus';
-import dayjs from 'dayjs';
+import WorkflowHistory from '../../components/Purchase/WorkflowHistory';
+import PurchaseQuoteForm from '../../components/Purchase/PurchaseQuoteForm';
+import PurchaseReturnForm from '../../components/Purchase/PurchaseReturnForm';
+import api from '../../services/api';
 
 interface SimplePurchaseDetailProps {
   visible: boolean;
   purchaseData: any;
   onClose: () => void;
   onRefresh?: () => void; // 刷新列表的回调函数
+  onEdit?: (purchaseData: any) => void; // 编辑申购单的回调函数
 }
 
 const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
   visible,
   purchaseData,
   onClose,
-  onRefresh
+  onRefresh,
+  onEdit
 }) => {
-  const [form] = Form.useForm();
+  const [approvalForm] = Form.useForm(); // 审批表单
   const [loading, setLoading] = useState(false);
+  const [historyVisible, setHistoryVisible] = useState(false);
+  const [quoteVisible, setQuoteVisible] = useState(false);
+  const [returnVisible, setReturnVisible] = useState(false);
+  // 新增：审批Modal状态
+  const [approvalVisible, setApprovalVisible] = useState(false);
+  const [approvalType, setApprovalType] = useState<'approve' | 'reject' | 'final_approve' | 'final_reject'>('approve');
   const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
   
   if (!purchaseData) {
@@ -79,107 +87,76 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`/api/v1/purchases/${purchaseData.id}/submit`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (response.ok) {
-        message.success('申购单提交成功');
-        onRefresh?.();
-        onClose();
-      } else {
-        const error = await response.text();
-        message.error(`提交失败: ${error}`);
-      }
-    } catch (error) {
+      await api.post(`purchases/${purchaseData.id}/submit`);
+      message.success('申购单提交成功');
+      onRefresh?.();
+      onClose();
+    } catch (error: any) {
       console.error('提交申购单失败:', error);
-      message.error('网络连接失败');
+      message.error(`提交失败: ${error.response?.data?.detail || error.message || '网络连接失败'}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // 采购员询价
-  const handleQuote = async (values: any) => {
-    setLoading(true);
+  // 旧的询价函数已移除，使用独立的PurchaseQuoteForm组件
+
+  // 处理审批Modal的提交
+  const handleApprovalSubmit = async () => {
     try {
-      const token = localStorage.getItem('access_token');
+      console.log('📋 [审批Modal] 开始处理审批提交, type:', approvalType);
+      const values = await approvalForm.validateFields();
+      console.log('📋 [审批Modal] 表单验证通过, values:', values);
       
-      // 构造询价数据
-      const quoteData = {
-        payment_method: values.payment_method,
-        estimated_delivery_date: values.estimated_delivery_date?.toISOString(),
-        quote_notes: values.quote_notes,
-        items: purchaseData.items?.map((item: any) => ({
-          item_id: item.id,
-          unit_price: values[`unit_price_${item.id}`] || 0,
-          supplier_name: values[`supplier_name_${item.id}`] || '',
-          supplier_contact: values[`supplier_contact_${item.id}`] || '',
-          estimated_delivery: values.estimated_delivery_date?.toISOString()
-        })) || []
-      };
-
-      const response = await fetch(`/api/v1/purchases/${purchaseData.id}/quote`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(quoteData)
-      });
-
-      if (response.ok) {
-        message.success('询价完成');
-        form.resetFields();
-        onRefresh?.();
-        onClose();
-      } else {
-        const error = await response.text();
-        message.error(`询价失败: ${error}`);
+      if (approvalType === 'approve') {
+        await handleDeptApprove(true, values.approval_notes || '');
+      } else if (approvalType === 'reject') {
+        await handleDeptApprove(false, values.rejection_notes || '');
+      } else if (approvalType === 'final_approve') {
+        await handleFinalApprove(true, values.final_approval_notes || '');
+      } else if (approvalType === 'final_reject') {
+        await handleFinalApprove(false, values.final_rejection_notes || '');
       }
+      
+      setApprovalVisible(false);
+      approvalForm.resetFields();
     } catch (error) {
-      console.error('询价失败:', error);
-      message.error('网络连接失败');
-    } finally {
-      setLoading(false);
+      console.error('📋 [审批Modal] 表单验证失败:', error);
     }
+  };
+
+  // 开启审批Modal
+  const openApprovalModal = (type: 'approve' | 'reject' | 'final_approve' | 'final_reject') => {
+    console.log('📋 [审批Modal] 打开审批Modal, type:', type);
+    setApprovalType(type);
+    setApprovalVisible(true);
+    approvalForm.resetFields();
   };
 
   // 部门主管审批
   const handleDeptApprove = async (approved: boolean, notes: string) => {
+    console.log('🏢 [部门审批] 开始处理审批:', { approved, notes, purchaseId: purchaseData.id });
     setLoading(true);
     try {
-      const token = localStorage.getItem('access_token');
       const approvalData = {
         approval_status: approved ? 'approved' : 'rejected',
         approval_notes: notes
       };
 
-      const response = await fetch(`/api/v1/purchases/${purchaseData.id}/dept-approve`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(approvalData)
+      console.log('🏢 [部门审批] 发送数据:', approvalData);
+      await api.post(`purchases/${purchaseData.id}/dept-approve`, approvalData);
+      console.log('🏢 [部门审批] API调用成功');
+      message.success(approved ? '审批通过' : '审批拒绝');
+      onRefresh?.();
+      onClose();
+    } catch (error: any) {
+      console.error('🏢 [部门审批] 审批失败:', error);
+      console.error('🏢 [部门审批] 错误详情:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
       });
-
-      if (response.ok) {
-        message.success(approved ? '审批通过' : '审批拒绝');
-        onRefresh?.();
-        onClose();
-      } else {
-        const error = await response.text();
-        message.error(`审批失败: ${error}`);
-      }
-    } catch (error) {
-      console.error('审批失败:', error);
-      message.error('网络连接失败');
+      message.error(`审批失败: ${error.response?.data?.detail || error.message || '网络连接失败'}`);
     } finally {
       setLoading(false);
     }
@@ -187,34 +164,28 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
 
   // 总经理最终审批
   const handleFinalApprove = async (approved: boolean, notes: string) => {
+    console.log('👑 [总经理审批] 开始处理最终审批:', { approved, notes, purchaseId: purchaseData.id });
     setLoading(true);
     try {
-      const token = localStorage.getItem('access_token');
       const approvalData = {
         approval_status: approved ? 'approved' : 'rejected',
         approval_notes: notes
       };
 
-      const response = await fetch(`/api/v1/purchases/${purchaseData.id}/final-approve`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(approvalData)
+      console.log('👑 [总经理审批] 发送数据:', approvalData);
+      await api.post(`purchases/${purchaseData.id}/final-approve`, approvalData);
+      console.log('👑 [总经理审批] API调用成功');
+      message.success(approved ? '最终审批通过' : '最终审批拒绝');
+      onRefresh?.();
+      onClose();
+    } catch (error: any) {
+      console.error('👑 [总经理审批] 最终审批失败:', error);
+      console.error('👑 [总经理审批] 错误详情:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
       });
-
-      if (response.ok) {
-        message.success(approved ? '最终审批通过' : '最终审批拒绝');
-        onRefresh?.();
-        onClose();
-      } else {
-        const error = await response.text();
-        message.error(`最终审批失败: ${error}`);
-      }
-    } catch (error) {
-      console.error('最终审批失败:', error);
-      message.error('网络连接失败');
+      message.error(`最终审批失败: ${error.response?.data?.detail || error.message || '网络连接失败'}`);
     } finally {
       setLoading(false);
     }
@@ -243,71 +214,25 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
             </Button>
           )}
 
-          {/* 采购员询价 */}
+          {/* 采购员询价和退回 */}
           {status === 'submitted' && currentStep === 'purchaser' && canOperate('purchaser') && (
-            <Button
-              type="primary"
-              icon={<DollarOutlined />}
-              onClick={() => {
-                Modal.confirm({
-                  title: '采购员询价',
-                  content: (
-                    <Form
-                      form={form}
-                      layout="vertical"
-                      onFinish={handleQuote}
-                    >
-                      <Form.Item
-                        name="payment_method"
-                        label="付款方式"
-                        rules={[{ required: true, message: '请选择付款方式' }]}
-                      >
-                        <Select>
-                          <Select.Option value="prepayment">预付款</Select.Option>
-                          <Select.Option value="installment">分期付款</Select.Option>
-                          <Select.Option value="on_delivery">货到付款</Select.Option>
-                        </Select>
-                      </Form.Item>
-                      <Form.Item
-                        name="estimated_delivery_date"
-                        label="预计到货时间"
-                        rules={[{ required: true, message: '请选择预计到货时间' }]}
-                      >
-                        <DatePicker showTime />
-                      </Form.Item>
-                      <Form.Item name="quote_notes" label="询价备注">
-                        <Input.TextArea rows={3} />
-                      </Form.Item>
-                      <Divider />
-                      {purchaseData.items?.map((item: any) => (
-                        <div key={item.id} style={{ marginBottom: 16, padding: 8, border: '1px solid #d9d9d9' }}>
-                          <h5>{item.item_name}</h5>
-                          <Form.Item
-                            name={`unit_price_${item.id}`}
-                            label="单价"
-                            rules={[{ required: true, message: '请输入单价' }]}
-                          >
-                            <InputNumber min={0} precision={2} style={{ width: '100%' }} />
-                          </Form.Item>
-                          <Form.Item name={`supplier_name_${item.id}`} label="供应商名称">
-                            <Input />
-                          </Form.Item>
-                          <Form.Item name={`supplier_contact_${item.id}`} label="供应商联系方式">
-                            <Input />
-                          </Form.Item>
-                        </div>
-                      ))}
-                    </Form>
-                  ),
-                  width: 600,
-                  onOk: () => form.submit(),
-                  okText: '确认询价',
-                  cancelText: '取消'
-                });
-              }}
-            >
-              询价
-            </Button>
+            <>
+              <Button
+                type="primary"
+                icon={<DollarOutlined />}
+                onClick={() => setQuoteVisible(true)}
+              >
+                询价
+              </Button>
+              <Button
+                danger
+                icon={<CloseCircleOutlined />}
+                onClick={() => setReturnVisible(true)}
+                style={{ marginLeft: 8 }}
+              >
+                退回
+              </Button>
+            </>
           )}
 
           {/* 部门主管审批 */}
@@ -317,22 +242,8 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
                 type="primary"
                 icon={<CheckCircleOutlined />}
                 onClick={() => {
-                  Modal.confirm({
-                    title: '部门主管审批',
-                    content: (
-                      <Form form={form}>
-                        <Form.Item name="approval_notes" label="审批意见">
-                          <Input.TextArea rows={3} placeholder="请输入审批意见..." />
-                        </Form.Item>
-                      </Form>
-                    ),
-                    onOk: () => {
-                      const notes = form.getFieldValue('approval_notes') || '';
-                      handleDeptApprove(true, notes);
-                    },
-                    okText: '批准',
-                    cancelText: '取消'
-                  });
+                  console.log('🔘 [按钮点击] 部门批准按钮被点击');
+                  openApprovalModal('approve');
                 }}
                 loading={loading}
               >
@@ -342,26 +253,8 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
                 danger
                 icon={<CloseCircleOutlined />}
                 onClick={() => {
-                  Modal.confirm({
-                    title: '部门主管审批',
-                    content: (
-                      <Form form={form}>
-                        <Form.Item 
-                          name="rejection_notes" 
-                          label="拒绝理由"
-                          rules={[{ required: true, message: '请输入拒绝理由' }]}
-                        >
-                          <Input.TextArea rows={3} placeholder="请输入拒绝理由..." />
-                        </Form.Item>
-                      </Form>
-                    ),
-                    onOk: () => {
-                      const notes = form.getFieldValue('rejection_notes') || '';
-                      handleDeptApprove(false, notes);
-                    },
-                    okText: '确认拒绝',
-                    cancelText: '取消'
-                  });
+                  console.log('🔘 [按钮点击] 部门拒绝按钮被点击');
+                  openApprovalModal('reject');
                 }}
                 loading={loading}
               >
@@ -377,22 +270,8 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
                 type="primary"
                 icon={<CrownOutlined />}
                 onClick={() => {
-                  Modal.confirm({
-                    title: '总经理最终审批',
-                    content: (
-                      <Form form={form}>
-                        <Form.Item name="final_approval_notes" label="最终审批意见">
-                          <Input.TextArea rows={3} placeholder="请输入最终审批意见..." />
-                        </Form.Item>
-                      </Form>
-                    ),
-                    onOk: () => {
-                      const notes = form.getFieldValue('final_approval_notes') || '';
-                      handleFinalApprove(true, notes);
-                    },
-                    okText: '最终批准',
-                    cancelText: '取消'
-                  });
+                  console.log('🔘 [按钮点击] 总经理最终批准按钮被点击');
+                  openApprovalModal('final_approve');
                 }}
                 loading={loading}
               >
@@ -402,26 +281,8 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
                 danger
                 icon={<CloseCircleOutlined />}
                 onClick={() => {
-                  Modal.confirm({
-                    title: '总经理最终审批',
-                    content: (
-                      <Form form={form}>
-                        <Form.Item 
-                          name="final_rejection_notes" 
-                          label="最终拒绝理由"
-                          rules={[{ required: true, message: '请输入最终拒绝理由' }]}
-                        >
-                          <Input.TextArea rows={3} placeholder="请输入最终拒绝理由..." />
-                        </Form.Item>
-                      </Form>
-                    ),
-                    onOk: () => {
-                      const notes = form.getFieldValue('final_rejection_notes') || '';
-                      handleFinalApprove(false, notes);
-                    },
-                    okText: '确认拒绝',
-                    cancelText: '取消'
-                  });
+                  console.log('🔘 [按钮点击] 总经理最终拒绝按钮被点击');
+                  openApprovalModal('final_reject');
                 }}
                 loading={loading}
               >
@@ -502,13 +363,38 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
   ];
 
   return (
-    <Modal
-      title={`申购单详情 - ${purchaseData.request_code}`}
-      open={visible}
-      onCancel={onClose}
-      footer={null}
-      width={1000}
-    >
+    <>
+      <Modal
+        title={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>申购单详情 - {purchaseData.request_code}</span>
+            <Space>
+              {purchaseData.status === 'draft' && onEdit && (
+                <Button
+                  type="text"
+                  icon={<EditOutlined />}
+                  onClick={() => onEdit(purchaseData)}
+                  style={{ color: '#52c41a' }}
+                >
+                  编辑申购单
+                </Button>
+              )}
+              <Button
+                type="text"
+                icon={<HistoryOutlined />}
+                onClick={() => setHistoryVisible(!historyVisible)}
+                style={{ color: historyVisible ? '#1890ff' : undefined }}
+              >
+                工作流历史
+              </Button>
+            </Space>
+          </div>
+        }
+        open={visible}
+        onCancel={onClose}
+        footer={null}
+        width={1000}
+      >
       {/* 基本信息 */}
       <Descriptions bordered style={{ marginBottom: 16 }}>
         <Descriptions.Item label="申购单号">
@@ -562,7 +448,94 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         size="small"
         scroll={{ x: 900 }}
       />
-    </Modal>
+      
+      {/* 询价表单 */}
+      <PurchaseQuoteForm
+        visible={quoteVisible}
+        purchaseData={purchaseData}
+        onClose={() => setQuoteVisible(false)}
+        onSuccess={() => {
+          setQuoteVisible(false);
+          if (onRefresh) onRefresh();
+        }}
+      />
+      
+      {/* 退回表单 */}
+      <PurchaseReturnForm
+        visible={returnVisible}
+        purchaseData={purchaseData}
+        onClose={() => setReturnVisible(false)}
+        onSuccess={() => {
+          setReturnVisible(false);
+          if (onRefresh) onRefresh();
+        }}
+      />
+      </Modal>
+
+      {/* 工作流历史记录 */}
+      {historyVisible && (
+        <WorkflowHistory
+          purchaseId={purchaseData.id}
+          visible={historyVisible}
+          onClose={() => setHistoryVisible(false)}
+        />
+      )}
+
+      {/* 审批Modal */}
+      <Modal
+        title={
+          approvalType === 'approve' ? '部门主管审批' :
+          approvalType === 'reject' ? '部门主管审批' :
+          approvalType === 'final_approve' ? '总经理最终审批' :
+          '总经理最终审批'
+        }
+        visible={approvalVisible}
+        onOk={handleApprovalSubmit}
+        onCancel={() => {
+          setApprovalVisible(false);
+          approvalForm.resetFields();
+        }}
+        okText={
+          approvalType === 'approve' ? '确认批准' :
+          approvalType === 'reject' ? '确认拒绝' :
+          approvalType === 'final_approve' ? '最终批准' :
+          '确认拒绝'
+        }
+        cancelText="取消"
+        confirmLoading={loading}
+      >
+        <Form form={approvalForm} layout="vertical">
+          {approvalType === 'approve' && (
+            <Form.Item name="approval_notes" label="审批意见">
+              <Input.TextArea rows={3} placeholder="请输入审批意见..." />
+            </Form.Item>
+          )}
+          {approvalType === 'reject' && (
+            <Form.Item 
+              name="rejection_notes" 
+              label="拒绝理由"
+              rules={[{ required: true, message: '请输入拒绝理由' }]}
+            >
+              <Input.TextArea rows={3} placeholder="请输入拒绝理由..." />
+            </Form.Item>
+          )}
+          {approvalType === 'final_approve' && (
+            <Form.Item name="final_approval_notes" label="最终审批意见">
+              <Input.TextArea rows={3} placeholder="请输入最终审批意见..." />
+            </Form.Item>
+          )}
+          {approvalType === 'final_reject' && (
+            <Form.Item 
+              name="final_rejection_notes" 
+              label="最终拒绝理由"
+              rules={[{ required: true, message: '请输入最终拒绝理由' }]}
+            >
+              <Input.TextArea rows={3} placeholder="请输入最终拒绝理由..." />
+            </Form.Item>
+          )}
+        </Form>
+      </Modal>
+    </>
   );
 };
 

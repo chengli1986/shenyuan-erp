@@ -132,7 +132,7 @@ const EnhancedPurchaseForm: React.FC = () => {
 
   useEffect(() => {
     loadMaterialNames();
-  }, [loadMaterialNames]);
+  }, [selectedProjectId, loadMaterialNames]);
 
   // 添加申购明细
   const addItem = () => {
@@ -250,12 +250,16 @@ const EnhancedPurchaseForm: React.FC = () => {
             updatedItem.max_quantity = spec.total_quantity;
             updatedItem.remaining_quantity = spec.remaining_quantity;
             updatedItem.unit_price = spec.unit_price;
+            updatedItem.item_type = ItemType.MAIN_MATERIAL; // 自动设置为主材
             
             // 如果当前数量超过剩余可申购数量，调整数量
             if (updatedItem.quantity > spec.remaining_quantity) {
               updatedItem.quantity = Math.max(1, spec.remaining_quantity);
               message.warning(`申购数量已调整为最大可申购数量 ${spec.remaining_quantity}`);
             }
+          } else if (specResponse.specifications.length > 1) {
+            // 如果有多个规格选项，也设置为主材，但需要用户手动选择规格
+            updatedItem.item_type = ItemType.MAIN_MATERIAL;
           }
           
           // 如果系统分类自动选择，设置system_category_id
@@ -703,7 +707,7 @@ const EnhancedPurchaseForm: React.FC = () => {
                     setSelectedProjectId(value);
                     // 清空现有的申购明细
                     setItems([]);
-                    setMaterialNames([]);
+                    // 不需要手动清空materialNames，useEffect会自动重新加载
                   }}
                 >
                   {projects.map(project => (

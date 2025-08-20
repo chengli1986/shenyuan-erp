@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>连接状态调试</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .status {
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🔍 前后端连接状态调试工具</h2>
+        
+        <div class="test-section">
+            <h3>1. 基础连接测试</h3>
+            <button onclick="testDirectBackend()">测试直连后端 (localhost:8000)</button>
+            <button onclick="testProxyBackend()">测试代理后端 (localhost:3000)</button>
+            <div id="connectionResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 健康检查测试</h3>
+            <button onclick="testHealth()">测试 /health 接口</button>
+            <div id="healthResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 认证测试</h3>
+            <button onclick="testLogin()">测试登录功能</button>
+            <button onclick="testAuthAPI()">测试需要认证的API</button>
+            <div id="authResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. 实时状态监控</h3>
+            <button onclick="startMonitoring()">开始监控</button>
+            <button onclick="stopMonitoring()">停止监控</button>
+            <div id="monitorResult"></div>
+        </div>
+    </div>
+
+    <script>
+        let monitorInterval = null;
+
+        async function testDirectBackend() {
+            const result = document.getElementById('connectionResult');
+            result.innerHTML = '<div class="status info">测试中...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:8000/health');
+                const data = await response.json();
+                result.innerHTML = `
+                    <div class="status success">✅ 直连后端成功</div>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="status error">❌ 直连后端失败</div>
+                    <pre>错误: ${error.message}</pre>
+                `;
+            }
+        }
+
+        async function testProxyBackend() {
+            const result = document.getElementById('connectionResult');
+            result.innerHTML = '<div class="status info">测试中...</div>';
+            
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                result.innerHTML = `
+                    <div class="status success">✅ 代理后端成功</div>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="status error">❌ 代理后端失败</div>
+                    <pre>错误: ${error.message}</pre>
+                `;
+            }
+        }
+
+        async function testHealth() {
+            const result = document.getElementById('healthResult');
+            result.innerHTML = '<div class="status info">测试中...</div>';
+            
+            try {
+                const start = Date.now();
+                const response = await fetch('/health');
+                const end = Date.now();
+                const data = await response.json();
+                
+                result.innerHTML = `
+                    <div class="status success">✅ 健康检查成功 (${end - start}ms)</div>
+                    <pre>状态码: ${response.status}
+响应头: ${JSON.stringify([...response.headers.entries()], null, 2)}
+响应体: ${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="status error">❌ 健康检查失败</div>
+                    <pre>错误: ${error.message}</pre>
+                `;
+            }
+        }
+
+        async function testLogin() {
+            const result = document.getElementById('authResult');
+            result.innerHTML = '<div class="status info">测试登录中...</div>';
+            
+            try {
+                const formData = new FormData();
+                formData.append('username', 'admin');
+                formData.append('password', 'admin123');
+                
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    localStorage.setItem('test_token', data.access_token);
+                    result.innerHTML = `
+                        <div class="status success">✅ 登录成功</div>
+                        <pre>Token已保存: ${data.access_token.substring(0, 50)}...</pre>
+                    `;
+                } else {
+                    result.innerHTML = `
+                        <div class="status error">❌ 登录失败</div>
+                        <pre>错误: ${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="status error">❌ 登录异常</div>
+                    <pre>错误: ${error.message}</pre>
+                `;
+            }
+        }
+
+        async function testAuthAPI() {
+            const result = document.getElementById('authResult');
+            const token = localStorage.getItem('test_token');
+            
+            if (!token) {
+                result.innerHTML = '<div class="status error">❌ 请先登录获取Token</div>';
+                return;
+            }
+            
+            result.innerHTML = '<div class="status info">测试认证API中...</div>';
+            
+            try {
+                const response = await fetch('/api/v1/purchases/?page=1&size=10', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    result.innerHTML = `
+                        <div class="status success">✅ 认证API成功</div>
+                        <pre>申购单数量: ${data.total || 0}
+响应: ${JSON.stringify(data, null, 2).substring(0, 500)}...</pre>
+                    `;
+                } else {
+                    result.innerHTML = `
+                        <div class="status error">❌ 认证API失败 (${response.status})</div>
+                        <pre>错误: ${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="status error">❌ 认证API异常</div>
+                    <pre>错误: ${error.message}</pre>
+                `;
+            }
+        }
+
+        async function startMonitoring() {
+            if (monitorInterval) return;
+            
+            const result = document.getElementById('monitorResult');
+            let count = 0;
+            
+            monitorInterval = setInterval(async () => {
+                count++;
+                try {
+                    const start = Date.now();
+                    const response = await fetch('/health');
+                    const end = Date.now();
+                    const data = await response.json();
+                    
+                    result.innerHTML = `
+                        <div class="status success">🔄 监控中... (第${count}次检查)</div>
+                        <pre>时间: ${new Date().toLocaleTimeString()}
+延迟: ${end - start}ms
+状态: ${data.status}
+数据库: ${data.database}</pre>
+                    `;
+                } catch (error) {
+                    result.innerHTML = `
+                        <div class="status error">❌ 监控失败 (第${count}次检查)</div>
+                        <pre>时间: ${new Date().toLocaleTimeString()}
+错误: ${error.message}</pre>
+                    `;
+                }
+            }, 2000);
+        }
+
+        function stopMonitoring() {
+            if (monitorInterval) {
+                clearInterval(monitorInterval);
+                monitorInterval = null;
+                document.getElementById('monitorResult').innerHTML = '<div class="status info">⏹️ 监控已停止</div>';
+            }
+        }
+
+        // 页面加载时自动测试基础连接
+        window.onload = function() {
+            testProxyBackend();
+        };
+    </script>
+</body>
+</html>

@@ -47,7 +47,7 @@ class PurchaseService:
             project_id=request_data.project_id,
             requester_id=requester_id,
             required_date=request_data.required_date,
-            system_category=request_data.system_category,  # 添加所属系统字段
+            system_category=getattr(request_data, 'system_category', None),  # 可选的系统分类字段
             status=PurchaseStatus.DRAFT
         )
         self.db.add(purchase_request)
@@ -55,8 +55,8 @@ class PurchaseService:
         
         # 创建申购明细
         for item_data in request_data.items:
-            # 主材验证
-            if item_data.item_type == ItemType.MAIN_MATERIAL:
+            # 主材验证 - 使用字符串值比较避免枚举类型不匹配
+            if item_data.item_type.value == "main":
                 if not item_data.contract_item_id:
                     raise ValueError(f"主材 {item_data.item_name} 必须关联合同清单项")
                 
@@ -89,10 +89,10 @@ class PurchaseService:
                     system_category_id=item_data.system_category_id,
                     item_name=contract_item.item_name,
                     specification=contract_item.specification or item_data.specification,
-                    brand=contract_item.brand or item_data.brand,
+                    brand=contract_item.brand_model or item_data.brand,
                     unit=contract_item.unit,
                     quantity=item_data.quantity,
-                    item_type=ItemType.MAIN_MATERIAL,
+                    item_type="main",  # 直接使用字符串值避免枚举转换问题
                     remaining_quantity=item_data.quantity,
                     remarks=item_data.remarks
                 )
@@ -107,7 +107,7 @@ class PurchaseService:
                     brand=item_data.brand,
                     unit=item_data.unit,
                     quantity=item_data.quantity,
-                    item_type=ItemType.AUXILIARY_MATERIAL,
+                    item_type="auxiliary",  # 直接使用字符串值避免枚举转换问题
                     remaining_quantity=item_data.quantity,
                     remarks=item_data.remarks
                 )
@@ -285,14 +285,14 @@ class PurchaseService:
         today = datetime.now()
         prefix = f"PR{today.strftime('%Y%m%d')}"
         
-        # 查找今天的最大序号
-        last_request = self.db.query(PurchaseRequest).filter(
+        # 查找今天的最大序号 - 只查询request_code字段避免枚举解析错误
+        result = self.db.query(PurchaseRequest.request_code).filter(
             PurchaseRequest.request_code.like(f"{prefix}%")
         ).order_by(PurchaseRequest.request_code.desc()).first()
         
-        if last_request:
+        if result:
             # 提取序号并加1
-            last_seq = int(last_request.request_code[-4:])
+            last_seq = int(result[0][-4:])  # result是tuple，取第一个元素
             seq = str(last_seq + 1).zfill(4)
         else:
             seq = "0001"

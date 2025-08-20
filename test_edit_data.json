@@ -1,0 +1,18 @@
+{
+  "remarks": "测试编辑明细",
+  "items": [
+    {
+      "contract_item_id": null,
+      "system_category_id": null,
+      "item_name": "测试摄像机",
+      "specification": null,
+      "brand": null,
+      "unit": "台",
+      "quantity": "3.00",
+      "unit_price": null,
+      "total_price": null,
+      "item_type": "auxiliary",
+      "remarks": null
+    }
+  ]
+}

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>询价功能调试</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .section { margin: 20px 0; padding: 10px; border: 1px solid #ddd; }
+        input, textarea { width: 300px; margin: 5px 0; padding: 5px; }
+        button { padding: 10px 20px; margin: 10px 0; background: #1890ff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #40a9ff; }
+        .error { color: red; }
+        .success { color: green; }
+        .log { background: #f0f0f0; padding: 10px; margin: 10px 0; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>🔍 询价功能调试页面</h1>
+    
+    <div class="section">
+        <h2>1. 登录测试</h2>
+        <button onclick="login()">登录采购员账号</button>
+        <div id="loginResult"></div>
+    </div>
+    
+    <div class="section">
+        <h2>2. 获取待询价申购单</h2>
+        <button onclick="getSubmittedRequests()">获取待询价列表</button>
+        <div id="requestList"></div>
+    </div>
+    
+    <div class="section">
+        <h2>3. 模拟询价提交</h2>
+        <div>
+            申购单ID: <input type="text" id="requestId" value="51"><br>
+            物料ID: <input type="text" id="itemId" value="59"><br>
+            单价: <input type="number" id="unitPrice" value="1000"><br>
+            供应商: <input type="text" id="supplierName" value="测试供应商"><br>
+            联系人: <input type="text" id="contactPerson" value="张经理"><br>
+            联系方式: <input type="text" id="contact" value="13800138000"><br>
+            付款方式: <input type="text" id="paymentMethod" value="月结30天"><br>
+            预计到货: <input type="date" id="deliveryDate" value="2025-09-01"><br>
+            备注: <textarea id="notes">测试询价</textarea><br>
+            <button onclick="submitQuote()">提交询价</button>
+        </div>
+        <div id="quoteResult"></div>
+    </div>
+    
+    <div class="section">
+        <h2>调试日志</h2>
+        <div id="debugLog" class="log"></div>
+    </div>
+    
+    <script>
+        let token = '';
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+            logDiv.innerHTML += `<span style="color: ${color}">[${timestamp}] ${message}</span>\n`;
+            console.log(message);
+        }
+        
+        async function login() {
+            try {
+                log('开始登录...');
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'username=purchaser&password=purchase123'
+                });
+                
+                const data = await response.json();
+                log('登录响应: ' + JSON.stringify(data, null, 2));
+                
+                if (response.ok && data.access_token) {
+                    token = data.access_token;
+                    document.getElementById('loginResult').innerHTML = 
+                        `<span class="success">✅ 登录成功: ${data.user.name}</span>`;
+                    log('Token获取成功', 'success');
+                } else {
+                    document.getElementById('loginResult').innerHTML = 
+                        `<span class="error">❌ 登录失败</span>`;
+                    log('登录失败: ' + JSON.stringify(data), 'error');
+                }
+            } catch (error) {
+                log('登录异常: ' + error.message, 'error');
+                document.getElementById('loginResult').innerHTML = 
+                    `<span class="error">❌ 登录异常: ${error.message}</span>`;
+            }
+        }
+        
+        async function getSubmittedRequests() {
+            if (!token) {
+                alert('请先登录');
+                return;
+            }
+            
+            try {
+                log('获取待询价申购单...');
+                const response = await fetch('/api/v1/purchases/?status=submitted', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                log('申购单列表: ' + JSON.stringify(data, null, 2));
+                
+                if (response.ok) {
+                    const items = data.items || [];
+                    let html = `<h3>待询价申购单 (${items.length}条)</h3><ul>`;
+                    items.forEach(item => {
+                        html += `<li>ID: ${item.id}, 编号: ${item.request_code}, 项目: ${item.project_name}</li>`;
+                    });
+                    html += '</ul>';
+                    document.getElementById('requestList').innerHTML = html;
+                    
+                    // 自动填充第一个申购单ID
+                    if (items.length > 0) {
+                        document.getElementById('requestId').value = items[0].id;
+                        // 获取申购单详情
+                        getRequestDetails(items[0].id);
+                    }
+                } else {
+                    log('获取失败: ' + JSON.stringify(data), 'error');
+                }
+            } catch (error) {
+                log('获取异常: ' + error.message, 'error');
+            }
+        }
+        
+        async function getRequestDetails(requestId) {
+            try {
+                log(`获取申购单 ${requestId} 详情...`);
+                const response = await fetch(`/api/v1/purchases/${requestId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                log('申购单详情: ' + JSON.stringify(data, null, 2));
+                
+                if (response.ok && data.items && data.items.length > 0) {
+                    // 自动填充第一个物料ID
+                    document.getElementById('itemId').value = data.items[0].id;
+                    log(`自动填充物料ID: ${data.items[0].id}`, 'success');
+                }
+            } catch (error) {
+                log('获取详情异常: ' + error.message, 'error');
+            }
+        }
+        
+        async function submitQuote() {
+            if (!token) {
+                alert('请先登录');
+                return;
+            }
+            
+            const requestId = document.getElementById('requestId').value;
+            const itemId = document.getElementById('itemId').value;
+            const unitPrice = parseFloat(document.getElementById('unitPrice').value);
+            const supplierName = document.getElementById('supplierName').value;
+            const contactPerson = document.getElementById('contactPerson').value;
+            const contact = document.getElementById('contact').value;
+            const paymentMethod = document.getElementById('paymentMethod').value;
+            const deliveryDate = document.getElementById('deliveryDate').value;
+            const notes = document.getElementById('notes').value;
+            
+            const quoteData = {
+                quote_notes: notes,
+                items: [{
+                    item_id: parseInt(itemId),
+                    unit_price: unitPrice,
+                    supplier_name: supplierName,
+                    supplier_contact: contact,
+                    supplier_contact_person: contactPerson,
+                    payment_method: paymentMethod,
+                    estimated_delivery: deliveryDate + 'T00:00:00'
+                }]
+            };
+            
+            try {
+                log('提交询价数据: ' + JSON.stringify(quoteData, null, 2));
+                
+                const response = await fetch(`/api/v1/purchases/${requestId}/quote`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(quoteData)
+                });
+                
+                const responseText = await response.text();
+                log('响应状态: ' + response.status);
+                log('响应内容: ' + responseText);
+                
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (e) {
+                    data = { message: responseText };
+                }
+                
+                if (response.ok) {
+                    document.getElementById('quoteResult').innerHTML = 
+                        `<span class="success">✅ 询价成功！</span>`;
+                    log('询价成功: ' + JSON.stringify(data), 'success');
+                } else {
+                    document.getElementById('quoteResult').innerHTML = 
+                        `<span class="error">❌ 询价失败: ${data.detail || data.message}</span>`;
+                    log('询价失败: ' + JSON.stringify(data), 'error');
+                }
+            } catch (error) {
+                log('提交异常: ' + error.message, 'error');
+                document.getElementById('quoteResult').innerHTML = 
+                    `<span class="error">❌ 提交异常: ${error.message}</span>`;
+            }
+        }
+        
+        // 页面加载时自动登录
+        window.onload = function() {
+            log('页面加载完成，准备测试...');
+        };
+    </script>
+</body>
+</html>

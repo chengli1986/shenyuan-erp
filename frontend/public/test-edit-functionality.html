@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试申购单编辑功能</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin-bottom: 20px; border: 1px solid #ccc; padding: 15px; }
+        .success { color: green; }
+        .error { color: red; }
+        button { padding: 10px 15px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>申购单编辑功能测试</h1>
+    
+    <div class="test-section">
+        <h3>功能验证清单</h3>
+        <ul>
+            <li>✅ 后端编辑API基础功能正常</li>
+            <li>✅ 前端编辑组件已创建</li>
+            <li>✅ 编辑按钮已集成到列表和详情页</li>
+            <li>✅ TypeScript编译错误已修复（uuid替换为原生ID生成）</li>
+            <li>✅ 权限控制已实现（只有草稿状态可编辑）</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h3>测试步骤</h3>
+        <ol>
+            <li>访问申购单管理页面：<a href="http://localhost:3000/purchases" target="_blank">http://localhost:3000/purchases</a></li>
+            <li>查找状态为"草稿"的申购单</li>
+            <li>点击"编辑"按钮，验证编辑表单是否正常打开</li>
+            <li>测试物料选择和系统分类功能</li>
+            <li>验证表单保存功能</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h3>测试用账号</h3>
+        <ul>
+            <li><strong>管理员</strong>: admin / admin123（可编辑所有草稿申购单）</li>
+            <li><strong>项目经理</strong>: liqiang / liqiang123（可编辑负责项目的草稿申购单）</li>
+            <li><strong>采购员</strong>: purchaser / purchase123（可编辑所有草稿申购单）</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h3>API测试</h3>
+        <button onclick="testEditAPI()">测试编辑API</button>
+        <div id="apiResult"></div>
+    </div>
+
+    <script>
+        async function testEditAPI() {
+            const resultDiv = document.getElementById('apiResult');
+            resultDiv.innerHTML = '测试中...';
+            
+            try {
+                // 1. 登录
+                const loginResponse = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'username=admin&password=admin123'
+                });
+                
+                if (!loginResponse.ok) throw new Error('登录失败');
+                const { access_token } = await loginResponse.json();
+                
+                // 2. 获取申购单列表
+                const listResponse = await fetch('/api/v1/purchases/', {
+                    headers: { 'Authorization': `Bearer ${access_token}` }
+                });
+                
+                if (!listResponse.ok) throw new Error('获取申购单列表失败');
+                const { items } = await listResponse.json();
+                
+                const draftItem = items.find(item => item.status === 'draft');
+                if (!draftItem) throw new Error('没有找到草稿状态的申购单');
+                
+                // 3. 测试简单编辑
+                const editResponse = await fetch(`/api/v1/purchases/${draftItem.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${access_token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        remarks: `API测试编辑 - ${new Date().toLocaleString()}`
+                    })
+                });
+                
+                if (!editResponse.ok) {
+                    const errorText = await editResponse.text();
+                    throw new Error(`编辑失败: ${errorText}`);
+                }
+                
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        ✅ API测试成功！<br>
+                        - 登录成功<br>
+                        - 找到草稿申购单: ${draftItem.request_code}<br>
+                        - 编辑API调用成功<br>
+                        - 备注已更新
+                    </div>
+                `;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 测试失败: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

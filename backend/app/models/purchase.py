@@ -48,11 +48,11 @@ class WorkflowStep(enum.Enum):
 
 class PaymentMethod(enum.Enum):
     """付款方式枚举"""
-    PREPAYMENT = "prepayment"       # 预付款
-    DELIVERY_PAYMENT = "delivery"   # 货到付款
-    MONTHLY_SETTLEMENT = "monthly"  # 月结
-    CASH = "cash"                   # 现金
-    BANK_TRANSFER = "transfer"      # 银行转账
+    PREPAYMENT = "PREPAYMENT"              # 预付款
+    DELIVERY_PAYMENT = "DELIVERY_PAYMENT"  # 货到付款
+    MONTHLY_SETTLEMENT = "MONTHLY_SETTLEMENT"  # 月结
+    CASH = "CASH"                          # 现金
+    BANK_TRANSFER = "BANK_TRANSFER"        # 银行转账
 
 
 class PurchaseRequest(Base):
@@ -119,7 +119,7 @@ class PurchaseRequestItem(Base):
     total_price = Column(DECIMAL(15, 2))  # 总价
     
     # 类型标识
-    item_type = Column(Enum(ItemType), default=ItemType.MAIN_MATERIAL, nullable=False)
+    item_type = Column(String(20), default="auxiliary", nullable=False)
     
     # 供应商信息（采购员维护）
     supplier_id = Column(Integer, ForeignKey("suppliers.id"))

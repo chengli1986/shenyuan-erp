@@ -4,6 +4,7 @@
 
 from typing import List, Optional, Any
 from datetime import datetime
+from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
@@ -347,10 +348,11 @@ async def get_purchase_request(
         result['project_name'] = project_name
         result['requester_name'] = requester_name
     
-    # 为申购明细添加系统分类名称
+    # 为申购明细添加系统分类名称和剩余数量信息
     if 'items' in result and result['items']:
-        from app.models.contract import SystemCategory
+        from app.models.contract import SystemCategory, ContractItem
         for item in result['items']:
+            # 添加系统分类名称
             if item.get('system_category_id'):
                 category = db.query(SystemCategory).filter(
                     SystemCategory.id == item['system_category_id']
@@ -358,6 +360,27 @@ async def get_purchase_request(
                 item['system_category_name'] = category.category_name if category else None
             else:
                 item['system_category_name'] = None
+            
+            # 为主材添加合同清单的剩余数量信息
+            if item.get('item_type') == 'main' and item.get('contract_item_id'):
+                contract_item = db.query(ContractItem).filter(
+                    ContractItem.id == item['contract_item_id']
+                ).first()
+                if contract_item:
+                    # 计算剩余数量：合同数量 - 已申购数量
+                    from sqlalchemy import func
+                    from app.models.purchase import PurchaseRequestItem, ItemType
+                    
+                    # 获取该合同清单项已申购的总数量
+                    purchased_quantity = db.query(func.sum(PurchaseRequestItem.quantity)).filter(
+                        PurchaseRequestItem.contract_item_id == contract_item.id,
+                        PurchaseRequestItem.item_type == "main"
+                    ).scalar() or 0
+                    
+                    # 计算剩余数量
+                    remaining = float(contract_item.quantity) - float(purchased_quantity)
+                    item['remaining_quantity'] = max(0, remaining)
+                    item['max_quantity'] = float(contract_item.quantity)
     
     return result
 
@@ -393,7 +416,7 @@ async def create_purchase_request(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.put("/{request_id}", response_model=PurchaseRequestInDB)
+@router.put("/{request_id}", response_model=PurchaseRequestWithItems)
 async def update_purchase_request(
     request_id: int,
     update_data: PurchaseRequestUpdate,
@@ -405,21 +428,75 @@ async def update_purchase_request(
     if not request:
         raise HTTPException(status_code=404, detail="申购单不存在")
     
-    # 权限检查
-    if request.requester_id != current_user.id:
+    # 权限检查 - 支持项目经理编辑负责项目的申购单
+    can_edit = False
+    
+    # 1. 申请人可以编辑自己的申购单
+    if request.requester_id == current_user.id:
+        can_edit = True
+    
+    # 2. 项目经理可以编辑负责项目的草稿申购单
+    elif current_user.role.value == "project_manager":
+        project = db.query(Project).filter(Project.id == request.project_id).first()
+        if project and project.project_manager == current_user.name:
+            can_edit = True
+    
+    # 3. 管理员可以编辑任何申购单
+    elif current_user.role.value == "admin":
+        can_edit = True
+    
+    if not can_edit:
         raise HTTPException(status_code=403, detail="无权修改此申购单")
     
     # 状态检查
     if request.status != PurchaseStatus.DRAFT:
         raise HTTPException(status_code=400, detail="只能修改草稿状态的申购单")
     
-    # 更新数据
-    for field, value in update_data.dict(exclude_unset=True).items():
+    # 更新基本信息
+    update_dict = update_data.dict(exclude_unset=True, exclude={'items'})
+    for field, value in update_dict.items():
         setattr(request, field, value)
+    
+    # 如果提供了items，更新申购明细
+    if update_data.items is not None:
+        # 删除现有的申购明细
+        db.query(PurchaseRequestItem).filter(
+            PurchaseRequestItem.request_id == request_id
+        ).delete()
+        
+        # 添加新的申购明细
+        for item_data in update_data.items:
+            item = PurchaseRequestItem(
+                request_id=request_id,
+                contract_item_id=item_data.contract_item_id,
+                system_category_id=item_data.system_category_id,
+                item_name=item_data.item_name,
+                specification=item_data.specification,
+                brand=item_data.brand,
+                unit=item_data.unit,
+                quantity=item_data.quantity,
+                unit_price=getattr(item_data, 'unit_price', None),
+                total_price=getattr(item_data, 'total_price', None),
+                item_type=item_data.item_type,
+                remarks=item_data.remarks
+            )
+            db.add(item)
+    
+    # 重新计算总金额
+    items = db.query(PurchaseRequestItem).filter(
+        PurchaseRequestItem.request_id == request_id
+    ).all()
+    
+    total_amount = sum(
+        item.total_price or Decimal('0') for item in items
+    )
+    request.total_amount = total_amount if total_amount > 0 else None
     
     db.commit()
     db.refresh(request)
-    return request
+    
+    # 返回完整的申购单信息
+    return await get_purchase_request(request_id, db, current_user)
 
 
 @router.post("/{request_id}/submit", response_model=PurchaseRequestInDB)
@@ -463,9 +540,10 @@ async def submit_purchase_request(
     if not request.items:
         raise HTTPException(status_code=400, detail="申购单必须包含至少一个申购项")
     
-    # 验证必填字段
-    if not request.system_category:
-        raise HTTPException(status_code=400, detail="请填写所属系统信息")
+    # 验证必填字段 - 检查所有申购明细是否都有系统分类
+    for item in request.items:
+        if not item.system_category_id:
+            raise HTTPException(status_code=400, detail=f"申购明细'{item.item_name}'缺少所属系统信息，请在编辑页面选择系统分类")
     
     # 主材数量校验
     service = PurchaseService(db)
@@ -556,6 +634,14 @@ async def quote_purchase_request(
         item.supplier_contact = item_quote.supplier_contact
         item.estimated_delivery = item_quote.estimated_delivery
         
+        # 更新supplier_info JSON字段来存储新的信息
+        supplier_info = item.supplier_info or {}
+        if item_quote.supplier_contact_person:
+            supplier_info['contact_person'] = item_quote.supplier_contact_person
+        if item_quote.payment_method:
+            supplier_info['payment_method'] = item_quote.payment_method.value if hasattr(item_quote.payment_method, 'value') else item_quote.payment_method
+        item.supplier_info = supplier_info
+        
         total_amount += item.total_price
     
     # 查找部门主管（下一步审批人）
@@ -566,8 +652,7 @@ async def quote_purchase_request(
     # 更新申购单信息
     request.total_amount = total_amount
     request.status = PurchaseStatus.PRICE_QUOTED
-    request.payment_method = quote_data.payment_method
-    request.estimated_delivery_date = quote_data.estimated_delivery_date
+    # payment_method和estimated_delivery_date已移动到物料级别，这里不再设置
     request.current_step = "dept_manager"
     request.current_approver_id = dept_manager.id
     
@@ -582,9 +667,8 @@ async def quote_purchase_request(
         operation_notes=f"采购员 {current_user.name} 完成询价，总金额: {total_amount}",
         operation_data={
             "total_amount": float(total_amount),
-            "payment_method": quote_data.payment_method.value,
-            "estimated_delivery": quote_data.estimated_delivery_date.isoformat() if quote_data.estimated_delivery_date else None,
-            "quote_notes": quote_data.quote_notes
+            "quote_notes": quote_data.quote_notes,
+            "items_count": len(quote_data.items)
         }
     )
     db.add(workflow_log)
@@ -593,6 +677,72 @@ async def quote_purchase_request(
     db.refresh(request)
     
     # TODO: 发送通知给部门主管审批
+    
+    return request
+
+
+@router.post("/{request_id}/return", response_model=PurchaseRequestInDB)
+async def return_purchase_request(
+    request_id: int,
+    return_data: PurchaseRequestApprove,  # 复用审批结构，但只用notes字段
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    采购员退回申购单到项目经理
+    - 退回原因必填
+    - 状态变为draft，当前步骤回到project_manager
+    """
+    if current_user.role.value not in ["purchaser", "admin"]:
+        raise HTTPException(status_code=403, detail="只有采购员可以退回申购单")
+    
+    request = db.query(PurchaseRequest).filter(PurchaseRequest.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="申购单不存在")
+    
+    # 状态检查
+    if request.status != PurchaseStatus.SUBMITTED:
+        raise HTTPException(status_code=400, detail="只能退回已提交的申购单")
+    
+    # 工作流步骤检查
+    if request.current_step != "purchaser":
+        raise HTTPException(status_code=400, detail="当前步骤不允许退回操作")
+    
+    # 退回原因必填
+    if not return_data.approval_notes:
+        raise HTTPException(status_code=400, detail="退回原因不能为空")
+    
+    # 查找原申请人（项目经理）
+    requester = db.query(User).filter(User.id == request.requester_id).first()
+    if not requester:
+        raise HTTPException(status_code=500, detail="未找到原申请人")
+    
+    # 更新申购单状态
+    request.status = PurchaseStatus.DRAFT
+    request.current_step = "project_manager"
+    request.current_approver_id = request.requester_id
+    request.approval_notes = return_data.approval_notes
+    
+    # 记录工作流操作
+    workflow_log = PurchaseWorkflowLog(
+        request_id=request_id,
+        from_step="purchaser",
+        to_step="project_manager",
+        operation="return",
+        operator_id=current_user.id,
+        operator_role=current_user.role.value,
+        operation_notes=f"采购员 {current_user.name} 退回申购单：{return_data.approval_notes}",
+        operation_data={
+            "return_reason": return_data.approval_notes,
+            "returned_to": requester.name
+        }
+    )
+    db.add(workflow_log)
+    
+    db.commit()
+    db.refresh(request)
+    
+    # TODO: 发送通知给项目经理
     
     return request
 
@@ -628,7 +778,7 @@ async def dept_approve_purchase_request(
         raise HTTPException(status_code=403, detail="非当前指定审批人，无权操作")
     
     # 处理审批结果
-    if approval_data.approval_status == ApprovalStatus.APPROVED:
+    if approval_data.approval_status.value == ApprovalStatus.APPROVED.value:
         # 查找总经理（下一步审批人）
         general_manager = db.query(User).filter(User.role == UserRole.GENERAL_MANAGER).first()
         if not general_manager:
@@ -641,7 +791,7 @@ async def dept_approve_purchase_request(
         operation = "approve"
         to_step = "general_manager"
         
-    elif approval_data.approval_status == ApprovalStatus.REJECTED:
+    elif approval_data.approval_status.value == ApprovalStatus.REJECTED.value:
         # 拒绝：重置到采购员步骤重新询价
         purchaser = db.query(User).filter(User.role == UserRole.PURCHASER).first()
         request.status = PurchaseStatus.SUBMITTED
@@ -649,6 +799,8 @@ async def dept_approve_purchase_request(
         request.current_approver_id = purchaser.id if purchaser else None
         operation = "reject"
         to_step = "purchaser"
+    else:
+        raise HTTPException(status_code=400, detail=f"无效的审批状态: {approval_data.approval_status.value}")
     
     # 更新审批意见
     request.approval_notes = approval_data.approval_notes
@@ -716,7 +868,7 @@ async def final_approve_purchase_request(
         raise HTTPException(status_code=403, detail="非当前指定审批人，无权操作")
     
     # 处理审批结果
-    if approval_data.approval_status == ApprovalStatus.APPROVED:
+    if approval_data.approval_status.value == ApprovalStatus.APPROVED.value:
         # 最终批准：完成工作流
         request.status = PurchaseStatus.FINAL_APPROVED
         request.current_step = "completed"
@@ -724,7 +876,7 @@ async def final_approve_purchase_request(
         operation = "final_approve"
         to_step = "completed"
         
-    elif approval_data.approval_status == ApprovalStatus.REJECTED:
+    elif approval_data.approval_status.value == ApprovalStatus.REJECTED.value:
         # 拒绝：重置到部门主管步骤重新审批
         dept_manager = db.query(User).filter(User.role == UserRole.DEPT_MANAGER).first()
         request.status = PurchaseStatus.PRICE_QUOTED
@@ -732,6 +884,8 @@ async def final_approve_purchase_request(
         request.current_approver_id = dept_manager.id if dept_manager else None
         operation = "reject"
         to_step = "dept_manager"
+    else:
+        raise HTTPException(status_code=400, detail=f"无效的审批状态: {approval_data.approval_status.value}")
     
     # 更新审批意见
     request.approval_notes = approval_data.approval_notes
@@ -861,7 +1015,7 @@ async def delete_purchase_request(
     if not request:
         raise HTTPException(status_code=404, detail="申购单不存在")
     
-    # 权限检查 - 扩展项目经理权限
+    # 权限检查 - 扩展项目经理和采购员权限
     can_delete = False
     
     # 1. 申购单创建者可以删除
@@ -878,6 +1032,10 @@ async def delete_purchase_request(
         project = db.query(Project).filter(Project.id == request.project_id).first()
         if project and project.project_manager == current_user.name:
             can_delete = True
+    
+    # 4. 采购员可以删除任何草稿申购单（采购员需要管理所有申购单）
+    elif current_user.role.value == "purchaser":
+        can_delete = True
     
     if not can_delete:
         raise HTTPException(status_code=403, detail="无权删除此申购单")
@@ -935,6 +1093,10 @@ async def batch_delete_purchase_requests(
                 project = db.query(Project).filter(Project.id == request.project_id).first()
                 if project and project.project_manager == current_user.name:
                     can_delete = True
+            
+            # 4. 采购员可以删除任何草稿申购单（采购员需要管理所有申购单）
+            elif current_user.role.value == "purchaser":
+                can_delete = True
             
             if not can_delete:
                 failed_requests.append({

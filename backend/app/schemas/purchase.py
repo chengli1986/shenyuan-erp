@@ -8,7 +8,6 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, validator
 from enum import Enum
 
-
 class PurchaseStatus(str, Enum):
     """申购单状态"""
     DRAFT = "draft"
@@ -45,11 +44,11 @@ class WorkflowStep(str, Enum):
 
 class PaymentMethod(str, Enum):
     """付款方式"""
-    PREPAYMENT = "prepayment"
-    DELIVERY_PAYMENT = "delivery"
-    MONTHLY_SETTLEMENT = "monthly"
-    CASH = "cash"
-    BANK_TRANSFER = "transfer"
+    PREPAYMENT = "PREPAYMENT"
+    DELIVERY_PAYMENT = "DELIVERY_PAYMENT"
+    MONTHLY_SETTLEMENT = "MONTHLY_SETTLEMENT"
+    CASH = "CASH"
+    BANK_TRANSFER = "BANK_TRANSFER"
 
 
 # ========== 供应商相关 ==========
@@ -108,7 +107,7 @@ class PurchaseItemBase(BaseModel):
     brand: Optional[str] = None
     unit: str
     quantity: Decimal = Field(..., gt=0)
-    item_type: ItemType = ItemType.MAIN_MATERIAL
+    item_type: ItemType
     remarks: Optional[str] = None
 
 
@@ -119,7 +118,9 @@ class PurchaseItemCreate(PurchaseItemBase):
     @validator('contract_item_id')
     def validate_contract_item(cls, v, values):
         """主材必须关联合同清单项"""
-        if values.get('item_type') == ItemType.MAIN_MATERIAL and not v:
+        item_type = values.get('item_type')
+        # 主材必须关联合同清单项
+        if item_type == ItemType.MAIN_MATERIAL and not v:
             raise ValueError('主材必须关联合同清单项')
         return v
 
@@ -132,6 +133,8 @@ class PurchaseItemPriceQuote(BaseModel):
     supplier_id: Optional[int] = None
     supplier_name: Optional[str] = None
     supplier_contact: Optional[str] = None
+    supplier_contact_person: Optional[str] = None  # 新增：供应商联系人全名
+    payment_method: Optional[str] = None  # 修改为字符串，支持自由输入付款方式
     estimated_delivery: Optional[datetime] = None
     
     @validator('total_price', always=True)
@@ -223,6 +226,7 @@ class PurchaseRequestUpdate(BaseModel):
     required_date: Optional[datetime] = None
     remarks: Optional[str] = None
     status: Optional[PurchaseStatus] = None
+    items: Optional[List[PurchaseItemCreate]] = None
 
 
 class PurchaseRequestSubmit(BaseModel):
@@ -243,10 +247,9 @@ class PurchaseRequestApprove(BaseModel):
 
 class PurchaseRequestPriceQuote(BaseModel):
     """采购员询价"""
-    payment_method: PaymentMethod
-    estimated_delivery_date: Optional[datetime] = None
     items: List[PurchaseItemPriceQuote]
     quote_notes: Optional[str] = None
+    # 移除统一的payment_method和estimated_delivery_date，改为物料级别
 
 
 class PurchaseWorkflowOperation(BaseModel):
