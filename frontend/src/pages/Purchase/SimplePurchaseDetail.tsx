@@ -365,8 +365,54 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
       width: 100,
       render: (value: string) => parseFloat(value || '0').toFixed(2)
     },
-    // 根据用户权限显示价格信息
+    // 根据用户权限显示询价和价格信息
     ...(currentUser?.role !== 'project_manager' ? [
+      {
+        title: '供应商',
+        dataIndex: 'supplier_name',
+        width: 120,
+        render: (value: string) => value || '-'
+      },
+      {
+        title: '供应商联系人',
+        dataIndex: 'supplier_contact',
+        width: 120,
+        render: (value: string) => value || '-'
+      },
+      {
+        title: '付款方式',
+        dataIndex: 'payment_method',
+        width: 100,
+        render: (value: string, record: any) => {
+          // 正确的数据读取优先级：
+          // 1. 物料级payment_method字段 
+          // 2. supplier_info.payment_method (实际存储位置)
+          // 3. 申购单级别payment_method
+          let paymentMethod = value || record.supplier_info?.payment_method || purchaseData.payment_method;
+          
+          const paymentMethods: { [key: string]: string } = {
+            'PREPAYMENT': '预付款',
+            'ON_DELIVERY': '货到付款', 
+            'MONTHLY': '月结',
+            'INSTALLMENT': '分期付款'
+          };
+          return paymentMethods[paymentMethod] || paymentMethod || '-';
+        }
+      },
+      {
+        title: '预计交货',
+        dataIndex: 'estimated_delivery_date',
+        width: 100,
+        render: (value: string, record: any) => {
+          // 正确的数据读取优先级：
+          // 1. 物料级estimated_delivery_date字段
+          // 2. estimated_delivery字段 (实际存储位置)
+          // 3. 申购单级别estimated_delivery_date
+          const deliveryDate = value || record.estimated_delivery || purchaseData.estimated_delivery_date;
+          if (!deliveryDate) return '-';
+          return new Date(deliveryDate).toLocaleDateString('zh-CN');
+        }
+      },
       {
         title: '单价',
         dataIndex: 'unit_price',
@@ -431,7 +477,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         open={visible}
         onCancel={onClose}
         footer={null}
-        width={1000}
+        width={1200}
       >
       {/* 基本信息 */}
       <Descriptions bordered style={{ marginBottom: 16 }}>
@@ -474,6 +520,30 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         </Descriptions.Item>
       </Descriptions>
 
+      {/* 询价信息 - 根据用户角色和申购单状态显示 */}
+      {(currentUser?.role !== 'project_manager' && ['price_quoted', 'dept_approved', 'final_approved'].includes(purchaseData.status)) && (
+        <Descriptions 
+          title="询价信息" 
+          bordered 
+          style={{ marginBottom: 16 }}
+          size="small"
+        >
+          <Descriptions.Item label="付款方式">
+            {purchaseData.payment_method || '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label="预计交货日期">
+            {purchaseData.estimated_delivery_date 
+              ? new Date(purchaseData.estimated_delivery_date).toLocaleDateString('zh-CN')
+              : '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label="询价日期">
+            {purchaseData.quote_date 
+              ? new Date(purchaseData.quote_date).toLocaleDateString('zh-CN')
+              : '-'}
+          </Descriptions.Item>
+        </Descriptions>
+      )}
+
       {/* 工作流操作区域 */}
       {renderWorkflowActions()}
       
@@ -484,7 +554,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         rowKey="id"
         pagination={false}
         size="small"
-        scroll={{ x: 900 }}
+        scroll={{ x: 1400 }}
       />
       
       {/* 询价表单 */}

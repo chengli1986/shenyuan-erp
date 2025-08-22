@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>申购单详情UI测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .role-section { background-color: #f9f9f9; }
+        .api-section { background-color: #e8f5e8; }
+        button { margin: 5px; padding: 8px 15px; cursor: pointer; }
+        .result { margin-top: 10px; padding: 10px; background-color: #f0f0f0; border-radius: 3px; white-space: pre-wrap; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>申购单详情UI权限测试</h1>
+    
+    <div class="section role-section">
+        <h3>测试角色权限显示</h3>
+        <p>测试不同角色查看申购单详情时看到的信息</p>
+        <button onclick="testRole('admin')">管理员权限</button>
+        <button onclick="testRole('project_manager')">项目经理权限</button>
+        <button onclick="testRole('purchaser')">采购员权限</button>
+        <button onclick="testRole('dept_manager')">部门主管权限</button>
+        <div id="role-result" class="result hidden"></div>
+    </div>
+
+    <div class="section api-section">
+        <h3>申购单数据测试</h3>
+        <p>查看具体申购单的详细信息</p>
+        <input type="number" id="purchase-id" placeholder="申购单ID" value="65">
+        <button onclick="testPurchaseDetail()">查看申购单详情</button>
+        <div id="api-result" class="result hidden"></div>
+    </div>
+
+    <div class="section">
+        <h3>权限控制逻辑验证</h3>
+        <p>验证UI权限控制的逻辑</p>
+        <div>
+            <label>用户角色: 
+                <select id="user-role">
+                    <option value="admin">管理员</option>
+                    <option value="project_manager">项目经理</option>
+                    <option value="purchaser">采购员</option>
+                    <option value="dept_manager">部门主管</option>
+                </select>
+            </label>
+        </div>
+        <div>
+            <label>申购单状态: 
+                <select id="purchase-status">
+                    <option value="draft">草稿</option>
+                    <option value="submitted">已提交</option>
+                    <option value="price_quoted">已询价</option>
+                    <option value="dept_approved">部门审批</option>
+                    <option value="final_approved">最终审批</option>
+                </select>
+            </label>
+        </div>
+        <button onclick="testPermissionLogic()">验证权限逻辑</button>
+        <div id="permission-result" class="result hidden"></div>
+    </div>
+
+    <script>
+        // 测试不同角色的权限
+        async function testRole(role) {
+            const resultDiv = document.getElementById('role-result');
+            resultDiv.className = 'result';
+            resultDiv.textContent = '正在测试...';
+
+            try {
+                // 1. 登录获取token
+                const credentials = {
+                    'admin': 'admin/admin123',
+                    'project_manager': 'sunyun/sunyun123',
+                    'purchaser': 'purchaser/purchase123',
+                    'dept_manager': 'dept_manager/dept123'
+                };
+
+                const [username, password] = credentials[role].split('/');
+                
+                const loginResponse = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `username=${username}&password=${password}`
+                });
+
+                if (!loginResponse.ok) {
+                    throw new Error('登录失败');
+                }
+
+                const loginData = await loginResponse.json();
+                
+                // 2. 获取申购单列表
+                const purchasesResponse = await fetch('/api/v1/purchases/', {
+                    headers: { 'Authorization': `Bearer ${loginData.access_token}` }
+                });
+
+                if (!purchasesResponse.ok) {
+                    throw new Error('获取申购单失败');
+                }
+
+                const purchasesData = await purchasesResponse.json();
+                
+                // 3. 分析显示权限
+                const showPriceInfo = role !== 'project_manager';
+                const canViewSupplier = role !== 'project_manager';
+                
+                const result = {
+                    角色: loginData.user.name,
+                    权限: loginData.user.role,
+                    可查看申购单数量: purchasesData.total,
+                    可查看价格信息: showPriceInfo ? '是' : '否',
+                    可查看供应商信息: canViewSupplier ? '是' : '否',
+                    可查看询价信息: showPriceInfo ? '是' : '否'
+                };
+
+                resultDiv.textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                resultDiv.textContent = `错误: ${error.message}`;
+            }
+        }
+
+        // 测试申购单详情
+        async function testPurchaseDetail() {
+            const purchaseId = document.getElementById('purchase-id').value;
+            const resultDiv = document.getElementById('api-result');
+            resultDiv.className = 'result';
+            resultDiv.textContent = '正在查询...';
+
+            try {
+                // 使用管理员权限获取完整信息
+                const loginResponse = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'username=admin&password=admin123'
+                });
+
+                const loginData = await loginResponse.json();
+                
+                const response = await fetch(`/api/v1/purchases/${purchaseId}`, {
+                    headers: { 'Authorization': `Bearer ${loginData.access_token}` }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // 提取关键信息
+                const summary = {
+                    申购单号: data.request_code,
+                    状态: data.status,
+                    项目: data.project_name,
+                    申请人: data.requester_name,
+                    总金额: data.total_amount,
+                    付款方式: data.payment_method,
+                    预计交货: data.estimated_delivery_date,
+                    明细数量: data.items?.length || 0,
+                    首个明细: data.items?.[0] ? {
+                        物料名称: data.items[0].item_name,
+                        供应商: data.items[0].supplier_name,
+                        单价: data.items[0].unit_price,
+                        付款方式: data.items[0].payment_method
+                    } : null
+                };
+
+                resultDiv.textContent = JSON.stringify(summary, null, 2);
+            } catch (error) {
+                resultDiv.textContent = `错误: ${error.message}`;
+            }
+        }
+
+        // 测试权限控制逻辑
+        function testPermissionLogic() {
+            const role = document.getElementById('user-role').value;
+            const status = document.getElementById('purchase-status').value;
+            const resultDiv = document.getElementById('permission-result');
+            resultDiv.className = 'result';
+
+            // 权限控制逻辑
+            const showPriceInfo = role !== 'project_manager';
+            const showQuoteInfo = showPriceInfo && ['price_quoted', 'dept_approved', 'final_approved'].includes(status);
+            
+            const permissions = {
+                用户角色: role,
+                申购单状态: status,
+                权限控制结果: {
+                    显示价格信息: showPriceInfo ? '是' : '否',
+                    显示询价信息区域: showQuoteInfo ? '是' : '否',
+                    显示供应商列: showPriceInfo ? '是' : '否',
+                    显示付款方式列: showPriceInfo ? '是' : '否',
+                    显示交货日期列: showPriceInfo ? '是' : '否'
+                },
+                UI变化: {
+                    表格列数: showPriceInfo ? '11列（含询价信息）' : '7列（仅基本信息）',
+                    询价信息区域: showQuoteInfo ? '显示' : '隐藏',
+                    表格滚动宽度: showPriceInfo ? '1400px' : '900px'
+                }
+            };
+
+            resultDiv.textContent = JSON.stringify(permissions, null, 2);
+        }
+    </script>
+</body>
+</html>

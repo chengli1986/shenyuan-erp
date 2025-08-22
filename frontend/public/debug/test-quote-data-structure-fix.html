@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>询价数据结构修复验证</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .problem-section { background-color: #fff2e8; }
+        .solution-section { background-color: #e8f5e8; }
+        .test-section { background-color: #f0f8ff; }
+        button { margin: 5px; padding: 8px 15px; cursor: pointer; }
+        .result { margin-top: 10px; padding: 10px; background-color: #f0f0f0; border-radius: 3px; white-space: pre-wrap; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .highlight { background-color: #ffeb3b; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>询价数据结构显示修复验证</h1>
+    
+    <div class="section problem-section">
+        <h3>🐛 问题描述</h3>
+        <p>用户反馈：采购员和部门主管查看未完全批复的申购单时，付款方式和预计交货显示横杠，但完全批复的申购单可以看到这些信息。</p>
+        
+        <h4>问题分析：</h4>
+        <ul>
+            <li><strong>数据存储位置不一致</strong>：询价数据存储在不同字段中</li>
+            <li><strong>前端读取逻辑错误</strong>：没有按正确优先级读取数据</li>
+            <li><strong>状态相关的逻辑冲突</strong>：不同状态下数据结构不同</li>
+        </ul>
+        
+        <button onclick="analyzeProblem()">分析问题</button>
+        <div id="problem-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="section solution-section">
+        <h3>✅ 修复方案</h3>
+        <p>修复前端数据读取逻辑，按正确优先级读取询价信息：</p>
+        
+        <h4>付款方式读取优先级：</h4>
+        <ol>
+            <li><code>item.payment_method</code> (直接字段)</li>
+            <li><code>item.supplier_info.payment_method</code> (实际存储位置)</li>
+            <li><code>purchaseData.payment_method</code> (申购单级别)</li>
+        </ol>
+        
+        <h4>预计交货读取优先级：</h4>
+        <ol>
+            <li><code>item.estimated_delivery_date</code> (直接字段)</li>
+            <li><code>item.estimated_delivery</code> (实际存储位置)</li>
+            <li><code>purchaseData.estimated_delivery_date</code> (申购单级别)</li>
+        </ol>
+        
+        <button onclick="simulateFixedLogic()">模拟修复后逻辑</button>
+        <div id="solution-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="section test-section">
+        <h3>🧪 实际数据验证</h3>
+        <p>验证不同状态申购单的数据结构和显示效果</p>
+        
+        <div>
+            <h4>测试申购单：</h4>
+            <button onclick="testPurchase(64)">申购单64 (final_approved)</button>
+            <button onclick="testPurchase(65)">申购单65 (dept_approved)</button>
+            <button onclick="testPurchase(67)">申购单67 (final_approved)</button>
+        </div>
+        
+        <div>
+            <h4>不同角色测试：</h4>
+            <button onclick="testAllRoles()">测试所有角色视图</button>
+            <button onclick="compareDataStructures()">对比数据结构</button>
+        </div>
+        
+        <div id="test-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="section">
+        <h3>📊 修复前后对比</h3>
+        <p>展示修复前后的数据显示效果对比</p>
+        
+        <button onclick="showBeforeAfterComparison()">显示修复对比</button>
+        <div id="comparison-result" class="result" style="display:none;"></div>
+    </div>
+
+    <script>
+        // 分析问题
+        async function analyzeProblem() {
+            const resultDiv = document.getElementById('problem-result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result info';
+            resultDiv.textContent = '正在分析问题...';
+
+            try {
+                const loginResponse = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'username=admin&password=admin123'
+                });
+                const loginData = await loginResponse.json();
+
+                // 获取不同状态的申购单
+                const listResponse = await fetch('/api/v1/purchases/', {
+                    headers: { 'Authorization': `Bearer ${loginData.access_token}` }
+                });
+                const listData = await listResponse.json();
+
+                const analysis = {
+                    不同状态申购单统计: {},
+                    数据存储问题: {
+                        部门审批状态: {},
+                        最终审批状态: {}
+                    }
+                };
+
+                // 统计不同状态
+                listData.items.forEach(item => {
+                    const status = item.status;
+                    if (!analysis.不同状态申购单统计[status]) {
+                        analysis.不同状态申购单统计[status] = 0;
+                    }
+                    analysis.不同状态申购单统计[status]++;
+                });
+
+                // 检查具体数据结构
+                const deptApproved = listData.items.find(item => item.status === 'dept_approved');
+                const finalApproved = listData.items.find(item => item.status === 'final_approved');
+
+                if (deptApproved) {
+                    analysis.数据存储问题.部门审批状态 = {
+                        申购单号: deptApproved.request_code,
+                        申购单级付款方式: deptApproved.payment_method,
+                        申购单级预计交货: deptApproved.estimated_delivery_date
+                    };
+                }
+
+                if (finalApproved) {
+                    analysis.数据存储问题.最终审批状态 = {
+                        申购单号: finalApproved.request_code,
+                        申购单级付款方式: finalApproved.payment_method,
+                        申购单级预计交货: finalApproved.estimated_delivery_date
+                    };
+                }
+
+                resultDiv.className = 'result warning';
+                resultDiv.textContent = JSON.stringify(analysis, null, 2);
+
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `错误: ${error.message}`;
+            }
+        }
+
+        // 模拟修复后逻辑
+        function simulateFixedLogic() {
+            const resultDiv = document.getElementById('solution-result');
+            resultDiv.style.display = 'block';
+
+            // 模拟不同的数据结构情况
+            const scenarios = [
+                {
+                    场景: "部门审批状态 (dept_approved)",
+                    purchaseData: { payment_method: null, estimated_delivery_date: null },
+                    itemData: { 
+                        payment_method: null,
+                        estimated_delivery_date: null,
+                        supplier_info: { payment_method: "PREPAYMENT" },
+                        estimated_delivery: "2025-08-21T00:00:00"
+                    }
+                },
+                {
+                    场景: "最终审批状态 (final_approved)",
+                    purchaseData: { payment_method: "PREPAYMENT", estimated_delivery_date: "2025-08-25T10:00:00" },
+                    itemData: { 
+                        payment_method: null,
+                        estimated_delivery_date: null,
+                        supplier_info: null,
+                        estimated_delivery: null
+                    }
+                }
+            ];
+
+            const paymentMethods = {
+                'PREPAYMENT': '预付款',
+                'ON_DELIVERY': '货到付款',
+                'MONTHLY': '月结',
+                'INSTALLMENT': '分期付款'
+            };
+
+            const results = scenarios.map(scenario => {
+                const { purchaseData, itemData } = scenario;
+                
+                // 修复前逻辑
+                const oldPayment = itemData.payment_method || purchaseData.payment_method;
+                const oldDelivery = itemData.estimated_delivery_date || purchaseData.estimated_delivery_date;
+                
+                // 修复后逻辑  
+                const newPayment = itemData.payment_method || 
+                                  itemData.supplier_info?.payment_method || 
+                                  purchaseData.payment_method;
+                const newDelivery = itemData.estimated_delivery_date || 
+                                   itemData.estimated_delivery || 
+                                   purchaseData.estimated_delivery_date;
+
+                return {
+                    场景: scenario.场景,
+                    修复前显示: {
+                        付款方式: paymentMethods[oldPayment] || oldPayment || '横杠',
+                        预计交货: oldDelivery ? new Date(oldDelivery).toLocaleDateString('zh-CN') : '横杠'
+                    },
+                    修复后显示: {
+                        付款方式: paymentMethods[newPayment] || newPayment || '横杠',
+                        预计交货: newDelivery ? new Date(newDelivery).toLocaleDateString('zh-CN') : '横杠'
+                    },
+                    是否修复: {
+                        付款方式: (oldPayment || '横杠') !== (newPayment || '横杠') ? '是' : '否',
+                        预计交货: (oldDelivery || '横杠') !== (newDelivery || '横杠') ? '是' : '否'
+                    }
+                };
+            });
+
+            resultDiv.className = 'result success';
+            resultDiv.textContent = JSON.stringify(results, null, 2);
+        }
+
+        // 测试特定申购单
+        async function testPurchase(purchaseId) {
+            const resultDiv = document.getElementById('test-result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result info';
+            resultDiv.textContent = `正在测试申购单 ${purchaseId}...`;
+
+            try {
+                const loginResponse = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'username=admin&password=admin123'
+                });
+                const loginData = await loginResponse.json();
+
+                const detailResponse = await fetch(`/api/v1/purchases/${purchaseId}`, {
+                    headers: { 'Authorization': `Bearer ${loginData.access_token}` }
+                });
+                const detailData = await detailResponse.json();
+
+                const analysis = {
+                    申购单信息: {
+                        编号: detailData.request_code,
+                        状态: detailData.status,
+                        申购单级付款方式: detailData.payment_method,
+                        申购单级预计交货: detailData.estimated_delivery_date
+                    },
+                    物料项分析: detailData.items.slice(0, 2).map(item => ({
+                        物料名称: item.item_name,
+                        供应商: item.supplier_name,
+                        数据结构: {
+                            payment_method: item.payment_method,
+                            estimated_delivery_date: item.estimated_delivery_date,
+                            supplier_info: item.supplier_info,
+                            estimated_delivery: item.estimated_delivery
+                        },
+                        修复后显示效果: {
+                            付款方式: item.payment_method || item.supplier_info?.payment_method || detailData.payment_method || '横杠',
+                            预计交货: item.estimated_delivery_date || item.estimated_delivery || detailData.estimated_delivery_date || '横杠'
+                        }
+                    }))
+                };
+
+                resultDiv.className = 'result success';
+                resultDiv.textContent = JSON.stringify(analysis, null, 2);
+
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `错误: ${error.message}`;
+            }
+        }
+
+        // 测试所有角色
+        async function testAllRoles() {
+            const resultDiv = document.getElementById('test-result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result info';
+            resultDiv.textContent = '正在测试所有角色...';
+
+            try {
+                const roles = [
+                    { username: 'purchaser', password: 'purchase123', name: '采购员' },
+                    { username: 'dept_manager', password: 'dept123', name: '部门主管' },
+                    { username: 'sunyun', password: 'sunyun123', name: '项目经理' }
+                ];
+
+                const results = {};
+
+                for (const role of roles) {
+                    const loginResponse = await fetch('/api/v1/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `username=${role.username}&password=${role.password}`
+                    });
+                    const loginData = await loginResponse.json();
+
+                    const listResponse = await fetch('/api/v1/purchases/', {
+                        headers: { 'Authorization': `Bearer ${loginData.access_token}` }
+                    });
+                    const listData = await listResponse.json();
+
+                    // 查找有询价信息的申购单
+                    const quotedPurchases = listData.items.filter(item => 
+                        ['price_quoted', 'dept_approved', 'final_approved'].includes(item.status)
+                    );
+
+                    results[role.name] = {
+                        可查看申购单数: listData.total,
+                        已询价申购单数: quotedPurchases.length,
+                        权限: {
+                            可查看价格信息: role.username !== 'sunyun',
+                            可查看询价信息: role.username !== 'sunyun'
+                        },
+                        示例申购单: quotedPurchases.slice(0, 2).map(item => ({
+                            编号: item.request_code,
+                            状态: item.status,
+                            申购单级付款方式: item.payment_method || '无',
+                            申购单级预计交货: item.estimated_delivery_date || '无'
+                        }))
+                    };
+                }
+
+                resultDiv.className = 'result success';
+                resultDiv.textContent = JSON.stringify(results, null, 2);
+
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `错误: ${error.message}`;
+            }
+        }
+
+        // 对比数据结构
+        async function compareDataStructures() {
+            const resultDiv = document.getElementById('test-result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result info';
+            resultDiv.textContent = '正在对比数据结构...';
+
+            try {
+                const loginResponse = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'username=admin&password=admin123'
+                });
+                const loginData = await loginResponse.json();
+
+                // 获取不同状态的申购单详情
+                const purchaseIds = [64, 65, 67]; // 不同状态的申购单
+                const comparisons = [];
+
+                for (const id of purchaseIds) {
+                    const detailResponse = await fetch(`/api/v1/purchases/${id}`, {
+                        headers: { 'Authorization': `Bearer ${loginData.access_token}` }
+                    });
+                    const data = await detailResponse.json();
+                    
+                    const firstItem = data.items[0];
+                    comparisons.push({
+                        申购单: data.request_code,
+                        状态: data.status,
+                        申购单级数据: {
+                            payment_method: data.payment_method,
+                            estimated_delivery_date: data.estimated_delivery_date
+                        },
+                        物料级数据: firstItem ? {
+                            payment_method: firstItem.payment_method,
+                            estimated_delivery_date: firstItem.estimated_delivery_date,
+                            supplier_info: firstItem.supplier_info,
+                            estimated_delivery: firstItem.estimated_delivery
+                        } : null,
+                        修复后显示: firstItem ? {
+                            付款方式: firstItem.payment_method || firstItem.supplier_info?.payment_method || data.payment_method || '横杠',
+                            预计交货: firstItem.estimated_delivery_date || firstItem.estimated_delivery || data.estimated_delivery_date || '横杠'
+                        } : null
+                    });
+                }
+
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = `
+                    <h4>数据结构对比：</h4>
+                    <table>
+                        <tr>
+                            <th>申购单</th><th>状态</th><th>修复后付款方式</th><th>修复后预计交货</th>
+                        </tr>
+                        ${comparisons.map(item => `
+                            <tr>
+                                <td>${item.申购单}</td>
+                                <td>${item.状态}</td>
+                                <td class="${item.修复后显示?.付款方式 !== '横杠' ? 'highlight' : ''}">${item.修复后显示?.付款方式 || '无'}</td>
+                                <td class="${item.修复后显示?.预计交货 !== '横杠' ? 'highlight' : ''}">${item.修复后显示?.预计交货 || '无'}</td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                    <pre>${JSON.stringify(comparisons, null, 2)}</pre>
+                `;
+
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `错误: ${error.message}`;
+            }
+        }
+
+        // 显示修复前后对比
+        function showBeforeAfterComparison() {
+            const resultDiv = document.getElementById('comparison-result');
+            resultDiv.style.display = 'block';
+
+            const comparison = {
+                修复前问题: {
+                    部门审批状态: "付款方式和预计交货显示横杠",
+                    最终审批状态: "能正确显示付款方式和预计交货",
+                    逻辑冲突: "同样有询价信息，但显示不一致"
+                },
+                问题根因: {
+                    数据存储: "询价信息存储在 supplier_info.payment_method 和 estimated_delivery 字段中",
+                    前端逻辑: "只读取 payment_method 和 estimated_delivery_date 字段",
+                    数据缺失: "部分申购单的申购单级别字段为null，物料级别有数据"
+                },
+                修复方案: {
+                    读取优先级: "物料级直接字段 → 实际存储字段 → 申购单级字段",
+                    付款方式: "payment_method → supplier_info.payment_method → purchaseData.payment_method",
+                    预计交货: "estimated_delivery_date → estimated_delivery → purchaseData.estimated_delivery_date"
+                },
+                修复后效果: {
+                    一致性: "所有状态的申购单都能正确显示询价信息",
+                    权限控制: "项目经理仍然无法看到询价信息",
+                    数据完整: "充分利用所有可能的数据源"
+                }
+            };
+
+            resultDiv.className = 'result success';
+            resultDiv.textContent = JSON.stringify(comparison, null, 2);
+        }
+    </script>
+</body>
+</html>
