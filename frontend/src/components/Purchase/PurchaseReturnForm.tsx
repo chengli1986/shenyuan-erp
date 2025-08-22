@@ -30,6 +30,7 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
 
   const handleSubmit = async () => {
     try {
@@ -42,7 +43,13 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
       };
 
       await api.post(`purchases/${purchaseData.id}/return`, returnData);
-      message.success('申购单已退回给项目经理');
+      
+      // 根据当前用户角色显示正确的退回消息
+      const returnMessage = currentUser?.role === 'project_manager' 
+        ? '申购单已退回给采购员' 
+        : '申购单已退回给项目经理';
+      message.success(returnMessage);
+      
       onSuccess();
       onClose();
       form.resetFields();
@@ -81,7 +88,11 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
     >
       <Alert
         message="退回说明"
-        description="退回后申购单将返回草稿状态，项目经理需要重新修改并提交。请填写退回原因，以便项目经理了解需要修改的内容。"
+        description={
+          currentUser?.role === 'project_manager' 
+            ? "退回后申购单将重新进入采购员询价阶段。请填写退回原因，说明对当前询价的意见或要求。"
+            : "退回后申购单将返回草稿状态，项目经理需要重新修改并提交。请填写退回原因，以便项目经理了解需要修改的内容。"
+        }
         type="warning"
         icon={<ExclamationCircleOutlined />}
         style={{ marginBottom: 24 }}
@@ -123,8 +134,17 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
           description={
             <ul style={{ margin: 0, paddingLeft: 20 }}>
               <li>退回原因将记录到工作流历史中</li>
-              <li>项目经理会收到退回通知</li>
-              <li>退回后申购单状态变为草稿，需要重新提交</li>
+              {currentUser?.role === 'project_manager' ? (
+                <>
+                  <li>采购员会收到退回通知</li>
+                  <li>退回后申购单状态变为已提交，进入重新询价阶段</li>
+                </>
+              ) : (
+                <>
+                  <li>项目经理会收到退回通知</li>
+                  <li>退回后申购单状态变为草稿，需要重新提交</li>
+                </>
+              )}
             </ul>
           }
           type="info"

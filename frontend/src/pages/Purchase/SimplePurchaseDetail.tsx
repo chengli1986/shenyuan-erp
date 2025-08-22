@@ -235,6 +235,17 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
             </>
           )}
 
+          {/* 项目经理退回（在询价完成后，如对价格或供应商不满意可退回给采购员重新询价） */}
+          {status === 'price_quoted' && currentStep === 'dept_manager' && currentUser?.role === 'project_manager' && (
+            <Button
+              danger
+              icon={<CloseCircleOutlined />}
+              onClick={() => setReturnVisible(true)}
+            >
+              退回采购员
+            </Button>
+          )}
+
           {/* 部门主管审批 */}
           {status === 'price_quoted' && currentStep === 'dept_manager' && canOperate('dept_manager') && (
             <>
@@ -354,6 +365,33 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
       width: 100,
       render: (value: string) => parseFloat(value || '0').toFixed(2)
     },
+    // 根据用户权限显示价格信息
+    ...(currentUser?.role !== 'project_manager' ? [
+      {
+        title: '单价',
+        dataIndex: 'unit_price',
+        width: 100,
+        render: (value: string | number) => {
+          if (!value || parseFloat(value.toString()) === 0) return '-';
+          return `¥${parseFloat(value.toString()).toLocaleString('zh-CN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          })}`;
+        }
+      },
+      {
+        title: '总价',
+        dataIndex: 'total_price',
+        width: 120,
+        render: (value: string | number) => {
+          if (!value || parseFloat(value.toString()) === 0) return '-';
+          return `¥${parseFloat(value.toString()).toLocaleString('zh-CN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          })}`;
+        }
+      }
+    ] : []),
     {
       title: '备注',
       dataIndex: 'remarks',

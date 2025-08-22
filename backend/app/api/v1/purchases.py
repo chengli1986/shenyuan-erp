@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.models.purchase import (
     PurchaseRequest, PurchaseRequestItem, PurchaseApproval,
     Supplier, PurchaseStatus, ItemType, ApprovalStatus,
-    PurchaseWorkflowLog
+    PurchaseWorkflowLog, WorkflowStep
 )
 from app.models.project import Project
 from app.models.contract import ContractItem
@@ -689,52 +689,87 @@ async def return_purchase_request(
     current_user: User = Depends(deps.get_current_user)
 ):
     """
-    采购员退回申购单到项目经理
+    退回申购单
+    - 采购员退回：submitted状态 -> draft状态，回到project_manager
+    - 项目经理退回：price_quoted状态 -> submitted状态，回到purchaser
     - 退回原因必填
-    - 状态变为draft，当前步骤回到project_manager
     """
-    if current_user.role.value not in ["purchaser", "admin"]:
-        raise HTTPException(status_code=403, detail="只有采购员可以退回申购单")
+    if current_user.role.value not in ["purchaser", "project_manager", "admin"]:
+        raise HTTPException(status_code=403, detail="只有采购员和项目经理可以退回申购单")
     
     request = db.query(PurchaseRequest).filter(PurchaseRequest.id == request_id).first()
     if not request:
         raise HTTPException(status_code=404, detail="申购单不存在")
     
-    # 状态检查
-    if request.status != PurchaseStatus.SUBMITTED:
-        raise HTTPException(status_code=400, detail="只能退回已提交的申购单")
-    
-    # 工作流步骤检查
-    if request.current_step != "purchaser":
-        raise HTTPException(status_code=400, detail="当前步骤不允许退回操作")
-    
     # 退回原因必填
     if not return_data.approval_notes:
         raise HTTPException(status_code=400, detail="退回原因不能为空")
     
-    # 查找原申请人（项目经理）
-    requester = db.query(User).filter(User.id == request.requester_id).first()
-    if not requester:
-        raise HTTPException(status_code=500, detail="未找到原申请人")
+    # 根据当前用户角色和申购单状态决定退回逻辑
+    if current_user.role.value == "purchaser":
+        # 采购员退回逻辑
+        if request.status != PurchaseStatus.SUBMITTED:
+            raise HTTPException(status_code=400, detail="只能退回已提交的申购单")
+        if request.current_step != "purchaser":
+            raise HTTPException(status_code=400, detail="当前步骤不允许退回操作")
+        
+        # 查找原申请人（项目经理）
+        requester = db.query(User).filter(User.id == request.requester_id).first()
+        if not requester:
+            raise HTTPException(status_code=500, detail="未找到原申请人")
+        
+        # 更新申购单状态
+        request.status = PurchaseStatus.DRAFT
+        request.current_step = "project_manager"
+        request.current_approver_id = request.requester_id
+        
+        from_step = WorkflowStep.PURCHASER
+        to_step = WorkflowStep.PROJECT_MANAGER
+        operation_notes = f"采购员 {current_user.name} 退回申购单：{return_data.approval_notes}"
+        returned_to = requester.name
+        
+    elif current_user.role.value == "project_manager":
+        # 项目经理退回逻辑
+        if request.status != PurchaseStatus.PRICE_QUOTED:
+            raise HTTPException(status_code=400, detail="只能退回已询价的申购单")
+        if request.current_step != "dept_manager":
+            raise HTTPException(status_code=400, detail="当前步骤不允许退回操作")
+        
+        # 项目级权限检查：只能退回自己负责项目的申购单
+        from app.models.project import Project
+        project = db.query(Project).filter(Project.id == request.project_id).first()
+        if not project or project.project_manager != current_user.name:
+            raise HTTPException(status_code=403, detail="只能退回自己负责项目的申购单")
+        
+        # 查找采购员
+        purchaser = db.query(User).filter(User.role == UserRole.PURCHASER).first()
+        if not purchaser:
+            raise HTTPException(status_code=500, detail="未找到采购员")
+        
+        # 更新申购单状态
+        request.status = PurchaseStatus.SUBMITTED
+        request.current_step = "purchaser"
+        request.current_approver_id = purchaser.id
+        
+        from_step = WorkflowStep.DEPT_MANAGER
+        to_step = WorkflowStep.PURCHASER
+        operation_notes = f"项目经理 {current_user.name} 退回申购单：{return_data.approval_notes}"
+        returned_to = purchaser.name
     
-    # 更新申购单状态
-    request.status = PurchaseStatus.DRAFT
-    request.current_step = "project_manager"
-    request.current_approver_id = request.requester_id
     request.approval_notes = return_data.approval_notes
     
     # 记录工作流操作
     workflow_log = PurchaseWorkflowLog(
         request_id=request_id,
-        from_step="purchaser",
-        to_step="project_manager",
+        from_step=from_step,
+        to_step=to_step,
         operation="return",
         operator_id=current_user.id,
         operator_role=current_user.role.value,
-        operation_notes=f"采购员 {current_user.name} 退回申购单：{return_data.approval_notes}",
+        operation_notes=operation_notes,
         operation_data={
             "return_reason": return_data.approval_notes,
-            "returned_to": requester.name
+            "returned_to": returned_to
         }
     )
     db.add(workflow_log)
@@ -1029,8 +1064,9 @@ async def delete_purchase_request(
     # 3. 项目经理可以删除其负责项目的草稿申购单
     elif current_user.role.value == "project_manager":
         # 查询项目信息确认项目经理权限
-        project = db.query(Project).filter(Project.id == request.project_id).first()
-        if project and project.project_manager == current_user.name:
+        # 避免lazy loading问题，只查询需要的字段
+        project_result = db.query(Project.project_manager).filter(Project.id == request.project_id).first()
+        if project_result and project_result[0] == current_user.name:
             can_delete = True
     
     # 4. 采购员可以删除任何草稿申购单（采购员需要管理所有申购单）
@@ -1044,6 +1080,16 @@ async def delete_purchase_request(
     if request.status != PurchaseStatus.DRAFT:
         raise HTTPException(status_code=400, detail="只能删除草稿状态的申购单")
     
+    # 先删除相关的申购明细项（避免外键约束）
+    db.query(PurchaseRequestItem).filter(PurchaseRequestItem.request_id == request_id).delete()
+    
+    # 删除相关的工作流日志（避免外键约束）
+    db.query(PurchaseWorkflowLog).filter(PurchaseWorkflowLog.request_id == request_id).delete()
+    
+    # 删除相关的审批记录（如果有）
+    db.query(PurchaseApproval).filter(PurchaseApproval.request_id == request_id).delete()
+    
+    # 最后删除申购单主记录
     db.delete(request)
     db.commit()
     

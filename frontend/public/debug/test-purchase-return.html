@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>申购单退回功能测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        button {
+            padding: 8px 15px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>申购单退回功能测试</h1>
+    
+    <div class="test-section">
+        <h2>1. 登录测试</h2>
+        <button onclick="login('purchaser', 'purchase123')">登录采购员</button>
+        <button onclick="login('sunyun', 'sunyun123')">登录项目经理孙赟</button>
+        <div id="loginResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. 查看可退回的申购单</h2>
+        <button onclick="getReturnablePurchases()">获取可退回申购单列表</button>
+        <div id="purchaseList"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. 测试退回功能</h2>
+        <div>
+            <label>申购单ID: <input type="number" id="purchaseId" value="66"></label>
+            <label>退回原因: <input type="text" id="returnReason" value="测试退回原因" style="width: 300px;"></label>
+            <button onclick="testReturn()">测试退回</button>
+        </div>
+        <div id="returnResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. 申购单详情检查</h2>
+        <label>申购单ID: <input type="number" id="detailId" value="66"></label>
+        <button onclick="checkPurchaseDetail()">查看详情</button>
+        <div id="detailResult"></div>
+    </div>
+
+    <script>
+        let authToken = null;
+        let currentUser = null;
+
+        async function login(username, password) {
+            try {
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `username=${username}&password=${password}`
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    authToken = data.access_token;
+                    currentUser = data.user;
+                    document.getElementById('loginResult').innerHTML = 
+                        `<p class="success">✓ 登录成功: ${currentUser.name} (${currentUser.role})</p>`;
+                } else {
+                    document.getElementById('loginResult').innerHTML = 
+                        `<p class="error">✗ 登录失败: ${data.detail}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('loginResult').innerHTML = 
+                    `<p class="error">✗ 错误: ${error.message}</p>`;
+            }
+        }
+
+        async function getReturnablePurchases() {
+            if (!authToken) {
+                alert('请先登录');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/purchases/?size=100', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    const purchases = data.items || [];
+                    
+                    // 根据用户角色筛选可退回的申购单
+                    let returnablePurchases = [];
+                    if (currentUser.role === 'purchaser') {
+                        returnablePurchases = purchases.filter(p => 
+                            p.status === 'submitted' && p.current_step === 'purchaser'
+                        );
+                    } else if (currentUser.role === 'project_manager') {
+                        returnablePurchases = purchases.filter(p => 
+                            p.status === 'price_quoted' && p.current_step === 'dept_manager'
+                        );
+                    }
+
+                    let html = `<h3>可退回的申购单 (${returnablePurchases.length}条)</h3>`;
+                    html += '<table><tr><th>ID</th><th>申购单号</th><th>状态</th><th>当前步骤</th><th>项目</th></tr>';
+                    
+                    returnablePurchases.forEach(p => {
+                        html += `<tr>
+                            <td>${p.id}</td>
+                            <td>${p.request_code}</td>
+                            <td>${p.status}</td>
+                            <td>${p.current_step}</td>
+                            <td>${p.project_name || '-'}</td>
+                        </tr>`;
+                    });
+                    html += '</table>';
+
+                    if (returnablePurchases.length === 0) {
+                        html += '<p class="info">没有找到可退回的申购单</p>';
+                    }
+
+                    document.getElementById('purchaseList').innerHTML = html;
+                } else {
+                    document.getElementById('purchaseList').innerHTML = 
+                        `<p class="error">获取失败: ${data.detail}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('purchaseList').innerHTML = 
+                    `<p class="error">错误: ${error.message}</p>`;
+            }
+        }
+
+        async function testReturn() {
+            if (!authToken) {
+                alert('请先登录');
+                return;
+            }
+
+            const purchaseId = document.getElementById('purchaseId').value;
+            const returnReason = document.getElementById('returnReason').value;
+
+            try {
+                const response = await fetch(`/api/v1/purchases/${purchaseId}/return`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        approval_status: 'rejected',
+                        approval_notes: returnReason
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('returnResult').innerHTML = 
+                        `<p class="success">✓ 退回成功</p>
+                         <pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    document.getElementById('returnResult').innerHTML = 
+                        `<p class="error">✗ 退回失败: ${data.detail}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('returnResult').innerHTML = 
+                    `<p class="error">✗ 错误: ${error.message}</p>`;
+            }
+        }
+
+        async function checkPurchaseDetail() {
+            if (!authToken) {
+                alert('请先登录');
+                return;
+            }
+
+            const purchaseId = document.getElementById('detailId').value;
+
+            try {
+                const response = await fetch(`/api/v1/purchases/${purchaseId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    const canReturn = checkCanReturn(data);
+                    
+                    document.getElementById('detailResult').innerHTML = 
+                        `<h3>申购单详情</h3>
+                         <p><strong>申购单号:</strong> ${data.request_code}</p>
+                         <p><strong>状态:</strong> ${data.status}</p>
+                         <p><strong>当前步骤:</strong> ${data.current_step}</p>
+                         <p><strong>申请人:</strong> ${data.requester_name}</p>
+                         <p><strong>项目:</strong> ${data.project_name}</p>
+                         <p class="${canReturn ? 'success' : 'info'}">
+                            ${canReturn ? '✓ 可以退回' : '✗ 不能退回 (状态或步骤不符合要求)'}
+                         </p>`;
+                } else {
+                    document.getElementById('detailResult').innerHTML = 
+                        `<p class="error">获取失败: ${data.detail}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('detailResult').innerHTML = 
+                    `<p class="error">错误: ${error.message}</p>`;
+            }
+        }
+
+        function checkCanReturn(purchase) {
+            if (currentUser.role === 'purchaser') {
+                return purchase.status === 'submitted' && purchase.current_step === 'purchaser';
+            } else if (currentUser.role === 'project_manager') {
+                return purchase.status === 'price_quoted' && purchase.current_step === 'dept_manager';
+            }
+            return false;
+        }
+    </script>
+</body>
+</html>

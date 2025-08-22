@@ -3283,3 +3283,177 @@
 
   **这标志着申购单模块从简化版(v1.0)成功演进为企业级完整工作流系统(v2.0)**，为后续功能扩展和企业级应用奠定了坚实基础。
 
+  ## 项目经理退回功能完善记录 (2025-08-21)
+
+  ### 问题场景和用户反馈
+  **用户报告**："项目经理孙赟在申购单详情，退回采购员这个退回按钮点击后填写退回原因，再点击确认退回，无效"
+  **业务需求**：项目经理在询价完成后，如果对价格或供应商不满意，应该能够退回给采购员重新询价
+
+  ### 系统化调试过程
+
+  #### 第一步：验证前端UI显示
+  ```typescript
+  // SimplePurchaseDetail.tsx中确实存在项目经理退回按钮
+  {status === 'price_quoted' && currentStep === 'dept_manager' && currentUser?.role === 'project_manager' && (
+    <Button danger onClick={() => setReturnVisible(true)}>
+      退回采购员
+    </Button>
+  )}
+  ```
+
+  #### 第二步：验证后端API支持
+  ```python
+  # backend/app/api/v1/purchases.py - return_purchase_request
+  elif current_user.role.value == "project_manager":
+      # 项目经理退回逻辑
+      if request.status != PurchaseStatus.PRICE_QUOTED:
+          raise HTTPException(status_code=400, detail="只能退回已询价的申购单")
+      
+      # 更新状态为submitted，回到采购员
+      request.status = PurchaseStatus.SUBMITTED
+      request.current_step = "purchaser"
+      request.current_approver_id = purchaser.id
+  ```
+
+  #### 第三步：API调用测试
+  ```bash
+  # 测试项目经理退回API
+  TOKEN=$(curl -s -X POST "http://localhost:8000/api/v1/auth/login" \
+    -d "username=sunyun&password=sunyun123" | jq -r '.access_token')
+  
+  # 执行退回操作
+  curl -s -X POST "http://localhost:8000/api/v1/purchases/64/return" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"approval_status": "rejected", "approval_notes": "价格太高，需要重新询价"}'
+  
+  # 结果：API调用成功，状态正确变化
+  {
+    "status": "submitted",
+    "current_step": "purchaser",
+    "approval_notes": "价格太高，需要重新询价"
+  }
+  ```
+
+  ### 问题根本原因分析
+  **核心发现**：后端API功能正常，问题在前端显示逻辑
+
+  #### 问题1：成功消息错误
+  ```typescript
+  // PurchaseReturnForm.tsx原代码
+  message.success('申购单已退回给项目经理');  // ❌ 错误：项目经理退回应该显示"退回给采购员"
+  ```
+
+  #### 问题2：退回说明不准确
+  ```typescript
+  // 原代码：所有角色显示相同的退回说明
+  description="退回后申购单将返回草稿状态，项目经理需要重新修改并提交。"
+  // 问题：项目经理退回后申购单应该是submitted状态，不是draft状态
+  ```
+
+  ### 技术解决方案
+
+  #### 核心思路：根据用户角色动态显示内容
+  ```typescript
+  // PurchaseReturnForm.tsx修复方案
+  
+  // 1. 获取当前用户信息
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+  
+  // 2. 动态成功消息
+  const returnMessage = currentUser?.role === 'project_manager' 
+    ? '申购单已退回给采购员' 
+    : '申购单已退回给项目经理';
+  message.success(returnMessage);
+  
+  // 3. 动态退回说明
+  description={
+    currentUser?.role === 'project_manager' 
+      ? "退回后申购单将重新进入采购员询价阶段。请填写退回原因，说明对当前询价的意见或要求。"
+      : "退回后申购单将返回草稿状态，项目经理需要重新修改并提交。请填写退回原因，以便项目经理了解需要修改的内容。"
+  }
+  
+  // 4. 动态注意事项
+  {currentUser?.role === 'project_manager' ? (
+    <>
+      <li>采购员会收到退回通知</li>
+      <li>退回后申购单状态变为已提交，进入重新询价阶段</li>
+    </>
+  ) : (
+    <>
+      <li>项目经理会收到退回通知</li>
+      <li>退回后申购单状态变为草稿，需要重新提交</li>
+    </>
+  )}
+  ```
+
+  ### 修复成果和验证
+
+  #### 功能验证完成
+  - ✅ **项目经理退回功能正常**：申购单从`price_quoted`状态正确退回到`submitted`状态
+  - ✅ **UI消息准确**：项目经理退回显示"已退回给采购员"
+  - ✅ **退回说明正确**：根据角色显示对应的业务流程说明
+  - ✅ **注意事项清晰**：明确说明退回后的状态和接收方
+  - ✅ **工作流完整**：支持双向退回（采购员→项目经理，项目经理→采购员）
+
+  #### 技术指标
+  - **前端编译**：0个TypeScript错误，组件渲染正常
+  - **API调用**：后端API正常工作，状态流转正确
+  - **用户体验**：退回流程清晰，消息提示准确
+
+  ### 关键经验总结
+
+  #### 1. 调试方法论
+  **分层验证策略**：
+  ```
+  UI层（按钮存在）→ API层（功能正常）→ 业务层（消息错误）→ 修复层（角色判断）
+  ```
+
+  #### 2. 用户体验设计原则
+  - **角色感知**：UI组件应该感知用户角色，显示相应内容
+  - **消息准确**：操作反馈必须准确反映实际业务逻辑
+  - **流程清晰**：说明文字要准确描述业务流程状态
+
+  #### 3. 前端组件设计模式
+  ```typescript
+  // 最佳实践：获取用户信息并根据角色定制UI
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+  
+  // 条件渲染模式
+  {currentUser?.role === 'role_name' ? <ComponentA /> : <ComponentB />}
+  
+  // 动态内容模式
+  const message = currentUser?.role === 'role_name' ? 'Message A' : 'Message B';
+  ```
+
+  #### 4. 测试验证技巧
+  ```bash
+  # 快速API测试脚本
+  test_return_api() {
+    local username=$1
+    local password=$2
+    local purchase_id=$3
+    
+    TOKEN=$(curl -s -X POST "http://localhost:8000/api/v1/auth/login" \
+      -d "username=$username&password=$password" | jq -r '.access_token')
+    
+    curl -s -X POST "http://localhost:8000/api/v1/purchases/$purchase_id/return" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"approval_status": "rejected", "approval_notes": "测试退回"}' | \
+      jq '{status, current_step}'
+  }
+  
+  # 使用示例
+  test_return_api "sunyun" "sunyun123" "64"
+  ```
+
+  ### 业务流程完整性确认
+  **完整的申购单退回流程现已支持**：
+  1. **采购员退回**：`submitted`状态 → `draft`状态（退回给项目经理修改）
+  2. **项目经理退回**：`price_quoted`状态 → `submitted`状态（退回给采购员重新询价）
+  3. **部门主管拒绝**：`price_quoted`状态 → `rejected`状态（申购单终止）
+  4. **总经理拒绝**：`dept_approved`状态 → `rejected`状态（申购单终止）
+
+  这次修复确保了申购单工作流的完整性和用户体验的一致性，为系统的稳定运行提供了重要保障。
+

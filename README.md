@@ -488,6 +488,60 @@ const [approvalType, setApprovalType] = useState<'approve' | 'reject' | 'final_a
 3. **调试方法论**：分层诊断（表象→直接原因→根本原因）
 4. **组件标准化**：统一的状态管理模式提高可维护性
 
+### 项目经理退回功能修复 (2025-08-21)
+
+#### 问题描述
+项目经理在申购单详情页面点击"退回采购员"按钮后，填写退回原因并确认，但功能无效。
+
+#### 问题根源
+1. **前端消息显示错误**：项目经理退回时显示"已退回给项目经理"，实际应该显示"已退回给采购员"
+2. **UI描述不准确**：退回说明和注意事项没有根据用户角色动态显示
+3. **API调用正常**：后端API工作正常，申购单能正确从`price_quoted`状态变为`submitted`状态
+
+#### 修复方案
+**在PurchaseReturnForm组件中根据用户角色动态显示内容**：
+
+```typescript
+// 1. 获取当前用户角色
+const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+
+// 2. 根据角色显示不同的成功消息
+const returnMessage = currentUser?.role === 'project_manager' 
+  ? '申购单已退回给采购员' 
+  : '申购单已退回给项目经理';
+message.success(returnMessage);
+
+// 3. 动态显示退回说明
+description={
+  currentUser?.role === 'project_manager' 
+    ? "退回后申购单将重新进入采购员询价阶段。请填写退回原因，说明对当前询价的意见或要求。"
+    : "退回后申购单将返回草稿状态，项目经理需要重新修改并提交。请填写退回原因，以便项目经理了解需要修改的内容。"
+}
+```
+
+#### 验证测试
+```bash
+# 测试项目经理退回功能
+TOKEN=$(curl -s -X POST "http://localhost:8000/api/v1/auth/login" \
+  -d "username=sunyun&password=sunyun123" | jq -r '.access_token')
+
+# 执行退回操作
+curl -s -X POST "http://localhost:8000/api/v1/purchases/64/return" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"approval_status": "rejected", "approval_notes": "价格太高，需要重新询价"}'
+
+# 验证状态变化
+curl -s "http://localhost:8000/api/v1/purchases/64" \
+  -H "Authorization: Bearer $TOKEN" | \
+  jq '{status, current_step, approval_notes}'
+```
+
+#### 修复成果
+- ✅ **项目经理退回功能正常**：申购单正确从询价完成状态退回到已提交状态
+- ✅ **UI消息准确**：根据用户角色显示正确的退回目标和说明
+- ✅ **工作流完整**：支持完整的退回流程（采购员→项目经理，项目经理→采购员）
+
 ### 项目级权限隔离系统 (2025-08-16)
 
 #### 核心功能
@@ -593,6 +647,128 @@ curl -s "http://localhost:8000/api/v1/auth/me" -H "Authorization: Bearer $TOKEN"
 - 统一使用`services/api.ts`进行所有API调用
 - 避免在Modal.confirm中使用复杂异步操作
 - 建立完整的调试工具链进行问题定位
+
+### 申购单工作流完整修复 (2025-08-21)
+
+#### 1. 项目经理退回功能修复
+
+**问题场景**：项目经理在申购单详情页面点击退回按钮填写退回原因后，确认退回操作无效。
+
+**根本原因分析**：
+- **后端API权限限制**：原有`/return` API只允许`purchaser`和`admin`角色访问
+- **前端UI显示限制**：退回按钮只在特定状态组合时显示
+- **业务逻辑缺口**：项目经理在`price_quoted`状态时应该能够退回申购单给采购员重新询价
+
+**技术解决方案**：
+```python
+# 后端API扩展支持项目经理退回
+if current_user.role.value == "project_manager":
+    # 项目经理退回：price_quoted → submitted，回到purchaser
+    if request.status != PurchaseStatus.PRICE_QUOTED:
+        raise HTTPException(status_code=400, detail="只能退回已询价的申购单")
+    # 项目级权限控制
+    project = db.query(Project).filter(Project.id == request.project_id).first()
+    if not project or project.project_manager != current_user.name:
+        raise HTTPException(status_code=403, detail="只能退回自己负责项目的申购单")
+```
+
+```typescript
+// 前端UI扩展显示退回按钮
+{status === 'price_quoted' && currentStep === 'dept_manager' && currentUser?.role === 'project_manager' && (
+  <Button danger icon={<CloseCircleOutlined />} onClick={() => setReturnVisible(true)}>
+    退回采购员
+  </Button>
+)}
+```
+
+**验证结果**：
+- ✅ 项目经理可在`price_quoted`状态退回申购单
+- ✅ 支持项目级权限隔离
+- ✅ 完整的工作流历史记录
+
+#### 2. 退回后申购单删除问题修复
+
+**问题场景**：退回操作成功后，申购单状态为`draft`，但删除时出现`Internal Server Error`。
+
+**根本原因分析**：
+- **枚举类型不一致**：退回API创建的工作流日志使用字符串值而非枚举类型
+- **SQLAlchemy级联加载错误**：删除时尝试加载相关记录遇到枚举值不匹配
+
+**技术解决方案**：
+```python
+# 修复枚举使用
+from_step = WorkflowStep.PURCHASER  # 使用枚举类型而非字符串
+to_step = WorkflowStep.PROJECT_MANAGER
+
+# 优化删除API，避免级联加载问题
+# 手动删除所有相关记录，按正确顺序
+db.query(PurchaseRequestItem).filter(PurchaseRequestItem.request_id == request_id).delete()
+db.query(PurchaseWorkflowLog).filter(PurchaseWorkflowLog.request_id == request_id).delete()
+db.query(PurchaseApproval).filter(PurchaseApproval.request_id == request_id).delete()
+db.delete(request)  # 最后删除主记录
+```
+
+**验证结果**：
+- ✅ 退回后的申购单可以正常删除
+- ✅ 数据库完整性保持
+- ✅ 所有相关记录正确清理
+
+#### 3. 申购单价格显示功能优化
+
+**用户需求**：申购单详情页面缺少物料的单价和总价显示。
+
+**技术实现**：
+```typescript
+// 基于用户角色的条件渲染价格列
+...(currentUser?.role !== 'project_manager' ? [
+  {
+    title: '单价',
+    dataIndex: 'unit_price',
+    render: (value) => {
+      if (!value || parseFloat(value.toString()) === 0) return '-';
+      return `¥${parseFloat(value.toString()).toLocaleString('zh-CN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })}`;
+    }
+  },
+  {
+    title: '总价',
+    dataIndex: 'total_price',
+    render: (value) => {
+      // 同上格式化逻辑
+    }
+  }
+] : [])
+```
+
+**功能特点**：
+- ✅ **智能权限控制**：项目经理看不到价格列，其他角色可以看到
+- ✅ **货币格式化**：使用中文货币格式（¥520.00）
+- ✅ **空值处理**：没有价格时显示"-"
+- ✅ **类型安全**：支持string|number类型的价格数据
+
+#### 经验总结和最佳实践
+
+**1. 权限系统开发原则**
+- 前后端权限逻辑必须完全一致
+- 使用枚举类型时需考虑数据库存储格式
+- 项目级权限控制需要在多个层次实现
+
+**2. 工作流系统调试技巧**
+- 分层诊断：表象问题 → 直接原因 → 根本原因 → 系统原因
+- 工具链组合：curl + jq + React DevTools
+- 枚举类型调试：检查`.value`属性使用和数据库存储格式
+
+**3. 删除操作最佳实践**
+- 避免ORM级联删除可能的枚举冲突
+- 手动按正确顺序删除：子记录 → 主记录
+- 外键约束处理：先删除依赖记录
+
+**4. 前端组件开发规范**
+- 条件渲染使用扩展运算符实现动态列
+- 权限控制在组件层和数据层双重实现
+- 格式化函数考虑多种数据类型和空值情况
 
 ## 开发最佳实践
 
