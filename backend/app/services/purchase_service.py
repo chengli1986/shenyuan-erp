@@ -306,7 +306,7 @@ class PurchaseService:
     ) -> Decimal:
         """
         获取某个合同清单项的累计已申购数量
-        只统计已批准和已完成的申购单
+        只统计总经理已批准和已完成的申购单
         """
         query = self.db.query(
             func.sum(PurchaseRequestItem.quantity)
@@ -316,9 +316,8 @@ class PurchaseService:
             and_(
                 PurchaseRequestItem.contract_item_id == contract_item_id,
                 PurchaseRequest.status.in_([
-                    PurchaseStatus.DEPT_APPROVED,
-                    PurchaseStatus.FINAL_APPROVED,
-                    PurchaseStatus.COMPLETED
+                    PurchaseStatus.FINAL_APPROVED,  # 只有总经理批准后才算真正占用
+                    PurchaseStatus.COMPLETED        # 已完成的也算占用
                 ])
             )
         )

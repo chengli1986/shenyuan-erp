@@ -360,6 +360,27 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
       render: (value: string) => parseFloat(value).toFixed(2)
     },
     {
+      title: '剩余可申购',
+      dataIndex: 'remaining_quantity',
+      width: 110,
+      render: (value: any, record: any) => {
+        // 只有主材显示剩余可申购数量
+        if (record.item_type === 'main' && record.contract_item_id) {
+          // 如果有剩余数量信息则显示，否则显示加载中
+          if (value !== undefined && value !== null) {
+            const remaining = parseFloat(value);
+            return (
+              <span style={{ color: remaining <= 0 ? '#ff4d4f' : remaining <= 10 ? '#faad14' : '#52c41a' }}>
+                {remaining.toFixed(2)}
+              </span>
+            );
+          }
+          return <span style={{ color: '#999' }}>计算中...</span>;
+        }
+        return '-';  // 辅材不显示剩余数量
+      }
+    },
+    {
       title: '已收数量',
       dataIndex: 'received_quantity',
       width: 100,
@@ -477,7 +498,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         open={visible}
         onCancel={onClose}
         footer={null}
-        width={1200}
+        width={1300}
       >
       {/* 基本信息 */}
       <Descriptions bordered style={{ marginBottom: 16 }}>
@@ -554,7 +575,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         rowKey="id"
         pagination={false}
         size="small"
-        scroll={{ x: 1400 }}
+        scroll={{ x: 1500 }}
       />
       
       {/* 询价表单 */}

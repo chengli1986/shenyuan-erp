@@ -110,9 +110,12 @@ async def get_contract_item_details(
     if not item:
         raise HTTPException(status_code=404, detail="合同清单物料不存在")
     
-    # 计算已申购数量（所有状态的申购单）
-    purchased_quantity = db.query(func.sum(PurchaseRequestItem.quantity)).filter(
-        PurchaseRequestItem.contract_item_id == item_id
+    # 计算已申购数量（只统计总经理已批准和已完成的申购单）
+    purchased_quantity = db.query(func.sum(PurchaseRequestItem.quantity)).join(
+        PurchaseRequest
+    ).filter(
+        PurchaseRequestItem.contract_item_id == item_id,
+        PurchaseRequest.status.in_([PurchaseStatus.FINAL_APPROVED, PurchaseStatus.COMPLETED])
     ).scalar() or 0
     
     # 计算剩余可申购数量
@@ -193,9 +196,12 @@ async def get_specifications_by_material(
     
     specifications = []
     for item in items:
-        # 计算已申购数量
-        purchased_quantity = db.query(func.sum(PurchaseRequestItem.quantity)).filter(
-            PurchaseRequestItem.contract_item_id == item.id
+        # 计算已申购数量（只统计总经理已批准和已完成的申购单）
+        purchased_quantity = db.query(func.sum(PurchaseRequestItem.quantity)).join(
+            PurchaseRequest
+        ).filter(
+            PurchaseRequestItem.contract_item_id == item.id,
+            PurchaseRequest.status.in_([PurchaseStatus.FINAL_APPROVED, PurchaseStatus.COMPLETED])
         ).scalar() or 0
         
         remaining_quantity = float(item.quantity) - float(purchased_quantity)
@@ -371,10 +377,13 @@ async def get_purchase_request(
                     from sqlalchemy import func
                     from app.models.purchase import PurchaseRequestItem, ItemType
                     
-                    # 获取该合同清单项已申购的总数量
-                    purchased_quantity = db.query(func.sum(PurchaseRequestItem.quantity)).filter(
+                    # 获取该合同清单项已申购的总数量（只统计总经理已批准和已完成的申购单）
+                    purchased_quantity = db.query(func.sum(PurchaseRequestItem.quantity)).join(
+                        PurchaseRequest
+                    ).filter(
                         PurchaseRequestItem.contract_item_id == contract_item.id,
-                        PurchaseRequestItem.item_type == "main"
+                        PurchaseRequestItem.item_type == "main",
+                        PurchaseRequest.status.in_([PurchaseStatus.FINAL_APPROVED, PurchaseStatus.COMPLETED])
                     ).scalar() or 0
                     
                     # 计算剩余数量
