@@ -17,7 +17,9 @@ import {
   DollarOutlined,
   CrownOutlined,
   EditOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  UpOutlined,
+  DownOutlined
 } from '@ant-design/icons';
 import { formatItemType } from '../../services/purchase';
 import WorkflowStatus, { PurchaseStatus, WorkflowStep } from '../../components/Purchase/WorkflowStatus';
@@ -46,6 +48,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
   const [historyVisible, setHistoryVisible] = useState(false);
   const [quoteVisible, setQuoteVisible] = useState(false);
   const [returnVisible, setReturnVisible] = useState(false);
+  const [workflowExpanded, setWorkflowExpanded] = useState(false); // 工作流进展展开状态
   // 新增：审批Modal状态
   const [approvalVisible, setApprovalVisible] = useState(false);
   const [approvalType, setApprovalType] = useState<'approve' | 'reject' | 'final_approve' | 'final_reject'>('approve');
@@ -577,6 +580,32 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         size="small"
         scroll={{ x: 1500 }}
       />
+      
+      {/* 工作流进展 - 可折叠显示 */}
+      <div style={{ marginTop: 24, borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+        <div style={{ marginBottom: 16 }}>
+          <Button 
+            type="text" 
+            icon={workflowExpanded ? <UpOutlined /> : <DownOutlined />}
+            onClick={() => setWorkflowExpanded(!workflowExpanded)}
+            style={{ padding: 0, height: 'auto', fontSize: 16, fontWeight: 600 }}
+          >
+            <Space>
+              <HistoryOutlined />
+              工作流进展
+            </Space>
+          </Button>
+        </div>
+        
+        {workflowExpanded && (
+          <WorkflowHistory
+            purchaseId={purchaseData.id}
+            visible={true}
+            onClose={() => {}}
+            embedded={true}
+          />
+        )}
+      </div>
       
       {/* 询价表单 */}
       <PurchaseQuoteForm

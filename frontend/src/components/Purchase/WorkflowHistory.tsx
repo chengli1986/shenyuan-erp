@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Timeline, 
   Card, 
@@ -24,7 +24,6 @@ import {
   HistoryOutlined
 } from '@ant-design/icons';
 import api from '../../services/api';
-import { formatPurchaseStatus } from '../../services/purchase';
 import dayjs from 'dayjs';
 
 const { Text, Paragraph } = Typography;
@@ -47,6 +46,7 @@ interface WorkflowHistoryProps {
   purchaseId: number;
   visible: boolean;
   onClose: () => void;
+  embedded?: boolean;  // 新增：是否为嵌入式显示
 }
 
 // 操作类型图标配置
@@ -71,13 +71,14 @@ const stepNames: { [key: string]: string } = {
 const WorkflowHistory: React.FC<WorkflowHistoryProps> = ({ 
   purchaseId, 
   visible, 
-  onClose 
+  onClose,
+  embedded = false 
 }) => {
   const [loading, setLoading] = useState(false);
   const [workflowLogs, setWorkflowLogs] = useState<WorkflowLogItem[]>([]);
 
   // 加载工作流历史
-  const loadWorkflowHistory = async () => {
+  const loadWorkflowHistory = useCallback(async () => {
     if (!purchaseId || !visible) return;
     
     setLoading(true);
@@ -90,11 +91,11 @@ const WorkflowHistory: React.FC<WorkflowHistoryProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [purchaseId, visible]);
 
   useEffect(() => {
     loadWorkflowHistory();
-  }, [purchaseId, visible]);
+  }, [purchaseId, visible, loadWorkflowHistory]);
 
   // 格式化操作类型显示
   const formatOperationType = (operation: string, fromStep: string, toStep: string) => {
@@ -219,6 +220,39 @@ const WorkflowHistory: React.FC<WorkflowHistoryProps> = ({
     };
   });
 
+  // 嵌入式显示模式
+  if (embedded) {
+    return (
+      <div>
+        <div style={{ marginBottom: 16 }}>
+          <Space>
+            <HistoryOutlined />
+            <Text strong style={{ fontSize: 16 }}>工作流进展</Text>
+          </Space>
+        </div>
+        <Spin spinning={loading}>
+          {workflowLogs.length === 0 ? (
+            <Empty 
+              description="暂无工作流记录" 
+              style={{ padding: '20px 0' }}
+            />
+          ) : (
+            <div>
+              <Timeline items={timelineItems} />
+              
+              <div style={{ textAlign: 'center', marginTop: 16 }}>
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  共 {workflowLogs.length} 条记录
+                </Text>
+              </div>
+            </div>
+          )}
+        </Spin>
+      </div>
+    );
+  }
+
+  // 原有的浮动卡片显示模式
   return (
     <Card
       title={
