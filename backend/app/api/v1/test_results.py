@@ -174,9 +174,16 @@ async def trigger_test_run(
         
         print(f"Running pytest in {backend_path}/{test_path}")
         
-        # 使用异步subprocess
+        # 使用虚拟环境的Python解释器
+        venv_python = os.path.join(backend_path, 'venv', 'bin', 'python')
+        if not os.path.exists(venv_python):
+            venv_python = sys.executable  # 如果虚拟环境不存在，使用当前解释器
+        
+        print(f"Using Python interpreter: {venv_python}")
+        
+        # 使用异步subprocess，排除disabled和manual目录
         process = await asyncio.create_subprocess_exec(
-            sys.executable, '-m', 'pytest', test_path, '-v', '--tb=line',
+            venv_python, '-m', 'pytest', test_path, '--ignore=tests/disabled', '--ignore=tests/manual', '-v', '--tb=line',
             cwd=backend_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE

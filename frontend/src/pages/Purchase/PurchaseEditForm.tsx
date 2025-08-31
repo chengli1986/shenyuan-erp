@@ -490,6 +490,62 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
         return;
       }
 
+      // 添加剩余数量验证
+      const problematicItems = items.filter(item => {
+        // 只检查主材的剩余数量
+        if (item.item_type === 'main') {
+          // 检查剩余数量是否为0或负数
+          if (item.remaining_quantity !== undefined && item.remaining_quantity <= 0) {
+            return true;
+          }
+          // 检查申购数量是否超过剩余数量
+          if (item.remaining_quantity !== undefined && item.quantity > item.remaining_quantity) {
+            return true;
+          }
+        }
+        return false;
+      });
+
+      // 如果有问题物料，显示详细提示
+      if (problematicItems.length > 0) {
+        const itemList = problematicItems.map((item, index) => {
+          const remaining = item.remaining_quantity || 0;
+          return `${index + 1}. ${item.item_name} (${item.specification}) - 申购: ${item.quantity}, 剩余: ${remaining}`;
+        }).join('\n');
+
+        // 先使用alert确保用户能看到提示
+        const errorMessage = `申购数量验证失败！\n\n以下物料的剩余可申购数量不足：\n\n${itemList}\n\n请调整申购数量后再保存。`;
+        alert(errorMessage);
+        
+        // 同时尝试Modal
+        Modal.error({
+          title: '申购数量验证失败',
+          width: 520,
+          content: (
+            <div>
+              <p>以下物料的剩余可申购数量不足，请调整申购数量：</p>
+              <pre style={{ 
+                background: '#f5f5f5', 
+                padding: '12px', 
+                borderRadius: '4px',
+                fontSize: '13px',
+                lineHeight: '1.6',
+                whiteSpace: 'pre-wrap'
+              }}>
+                {itemList}
+              </pre>
+              <p style={{ marginTop: '12px', color: '#666' }}>
+                提示：剩余可申购数量为0表示该物料已被其他申购单全部申购，
+                请减少申购数量或联系相关人员确认。
+              </p>
+            </div>
+          ),
+          okText: '我知道了',
+        });
+        setLoading(false);
+        return;
+      }
+
       for (const item of items) {
         if (!item.item_name.trim()) {
           message.error('请填写物料名称');

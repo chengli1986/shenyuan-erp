@@ -51,7 +51,10 @@
       "Bash(npm start)",
       "Bash(npm ls:*)",
       "Bash(PORT=3000 HOST=0.0.0.0 npm start)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(export:*)",
+      "Bash(export PORT=3000)",
+      "Bash(git restore:*)"
     ],
     "deny": []
   }

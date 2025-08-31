@@ -6,7 +6,7 @@ API v1版本路由汇总
 """
 
 from fastapi import APIRouter
-from . import projects, project_files, contracts, file_upload, test_results, test_simple, test_minimal, purchases, auth
+from . import projects, project_files, contracts, file_upload, test_results, purchases, auth
 
 # 创建v1版本的主路由
 api_router = APIRouter()
@@ -46,19 +46,6 @@ api_router.include_router(
     tags=["test-results"]
 )
 
-# 注册简化测试API路由
-api_router.include_router(
-    test_simple.router,
-    prefix="/tests",
-    tags=["test-simple"]
-)
-
-# 注册最小化测试API路由
-api_router.include_router(
-    test_minimal.router,
-    prefix="/tests",
-    tags=["test-minimal"]
-)
 
 # 注册采购请购相关的API路由
 api_router.include_router(

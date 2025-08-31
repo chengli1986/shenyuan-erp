@@ -13,7 +13,8 @@ import {
   Row,
   Col,
   Alert,
-  Tooltip
+  Tooltip,
+  Modal
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -365,6 +366,64 @@ const EnhancedPurchaseForm: React.FC = () => {
     
     if (invalidMainMaterials.length > 0) {
       message.error('主材必须从合同清单中选择，请检查物料名称和规格型号');
+      return;
+    }
+
+    // 验证剩余可申购数量
+    console.log('[调试] 开始验证剩余可申购数量...');
+    const problematicItems = items.filter(item => {
+      if (item.item_type === ItemType.MAIN_MATERIAL) {
+        console.log(`[调试] 检查主材: ${item.item_name}, 申购数量: ${item.quantity}, 剩余数量: ${item.remaining_quantity}`);
+        
+        // 检查剩余数量是否为0或负数，或申购数量超过剩余数量
+        if (item.remaining_quantity !== undefined && 
+            (item.remaining_quantity <= 0 || item.quantity > item.remaining_quantity)) {
+          console.log(`[调试] 发现问题物料: ${item.item_name}`);
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (problematicItems.length > 0) {
+      console.log('[调试] 显示验证失败弹窗');
+      const itemList = problematicItems.map((item, index) => 
+        `${index + 1}. ${item.item_name} - 申购: ${item.quantity}, 剩余: ${item.remaining_quantity || 0}`
+      ).join('\n');
+
+      // 先尝试alert作为备用方案
+      const errorMessage = `申购数量验证失败！\n\n以下物料的剩余可申购数量不足：\n\n${itemList}\n\n请调整申购数量后再保存。`;
+      alert(errorMessage);
+      
+      // 同时尝试Modal（如果Modal不工作，至少alert能显示）
+      try {
+        Modal.error({
+          title: '申购数量验证失败',
+          width: 520,
+          content: (
+            <div>
+              <p>以下物料的剩余可申购数量不足，请调整申购数量：</p>
+              <pre style={{ 
+                background: '#f5f5f5', 
+                padding: '12px', 
+                borderRadius: '4px',
+                fontSize: '13px',
+                lineHeight: '1.6',
+                whiteSpace: 'pre-wrap'
+              }}>
+                {itemList}
+              </pre>
+              <p style={{ marginTop: '12px', color: '#666' }}>
+                提示：剩余可申购数量为0表示该物料已被其他申购单全部申购，
+                请减少申购数量或联系相关人员确认。
+              </p>
+            </div>
+          ),
+          okText: '我知道了',
+        });
+      } catch (modalError) {
+        console.error('[调试] Modal显示失败:', modalError);
+      }
       return;
     }
 
