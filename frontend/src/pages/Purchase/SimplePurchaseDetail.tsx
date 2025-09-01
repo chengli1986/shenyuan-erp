@@ -8,7 +8,8 @@ import {
   Button,
   Form,
   Input,
-  message
+  message,
+  Tooltip
 } from 'antd';
 import { 
   CheckCircleOutlined, 
@@ -249,6 +250,32 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
             </Button>
           )}
 
+          {/* 采购员查看已询价申购单时，显示禁用的批准和拒绝按钮 */}
+          {status === 'price_quoted' && currentStep === 'dept_manager' && currentUser?.role === 'purchaser' && (
+            <>
+              <Tooltip title="此申购单已询价，节点已流转到部门主管处，等待部门主管审批">
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  disabled
+                  style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                >
+                  批准
+                </Button>
+              </Tooltip>
+              <Tooltip title="此申购单已询价，节点已流转到部门主管处，等待部门主管审批">
+                <Button
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  disabled
+                  style={{ opacity: 0.5, cursor: 'not-allowed', marginLeft: 8 }}
+                >
+                  拒绝
+                </Button>
+              </Tooltip>
+            </>
+          )}
+
           {/* 部门主管审批 */}
           {status === 'price_quoted' && currentStep === 'dept_manager' && canOperate('dept_manager') && (
             <>
@@ -274,6 +301,32 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
               >
                 拒绝
               </Button>
+            </>
+          )}
+
+          {/* 采购员查看部门已批准申购单时，显示禁用的最终批准和拒绝按钮 */}
+          {status === 'dept_approved' && currentStep === 'general_manager' && currentUser?.role === 'purchaser' && (
+            <>
+              <Tooltip title="此申购单已通过部门审批，节点已流转到总经理处，等待总经理最终审批">
+                <Button
+                  type="primary"
+                  icon={<CrownOutlined />}
+                  disabled
+                  style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                >
+                  最终批准
+                </Button>
+              </Tooltip>
+              <Tooltip title="此申购单已通过部门审批，节点已流转到总经理处，等待总经理最终审批">
+                <Button
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  disabled
+                  style={{ opacity: 0.5, cursor: 'not-allowed', marginLeft: 8 }}
+                >
+                  最终拒绝
+                </Button>
+              </Tooltip>
             </>
           )}
 
