@@ -2471,6 +2471,195 @@
   - **公网访问**: http://18.219.25.24:3000
   - **API文档**: http://localhost:8000/docs
 
+  ## 申购单工作流UI优化与Bug修复记录 (2025-09-01)
+
+  ### 用户反馈和需求分析
+  **核心需求**：用户提出"当项目经理提交了申购单后，采购员选择询价后，当采购员查看申购单详情的时候，仍然有批准和拒绝的按钮，但如果询价一旦提交，这个采购流程的节点就自动流转到了部门主管那里，所以采购员点击批准和拒绝按钮其实是没有任何作用的"
+
+  **优化建议**：
+  - 一旦对申购单中的物料进行询价后，申购单详情中的批准和拒绝用灰色表示，并不可点击
+  - 鼠标移到按钮上时，显示提示："此申购单已询价，节点流转到部门主管处"
+
+  ### 初步实现和重大Bug发现
+
+  #### 第一轮实现：添加灰色禁用按钮
+  **技术方案**：
+  ```typescript
+  // 采购员查看已询价申购单时，显示禁用的批准和拒绝按钮
+  {status === 'price_quoted' && currentStep === 'dept_manager' && currentUser?.role === 'purchaser' && (
+    <>
+      <Tooltip title="此申购单已询价，节点已流转到部门主管处，等待部门主管审批">
+        <Button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+          批准
+        </Button>
+      </Tooltip>
+    </>
+  )}
+  ```
+
+  #### 严重Bug发现：重复按钮显示
+  **用户反馈**："有bug，我以采购员身份查看申购单详情的时候，看到了灰色的批准和拒绝按钮，上面也有tooltip提示，这个很好。但是在他旁边还有一个可以点击的批准和拒绝，这应该是一个严重的bug"
+
+  **问题分析**：
+  ```
+  表象问题：出现重复的按钮
+       ↓
+  直接原因：新增的灰色按钮 + 原有的可点击按钮同时显示
+       ↓
+  根本原因：canOperate函数权限检查逻辑有缺陷
+       ↓
+  系统原因：未正确验证用户角色与工作流步骤的匹配关系
+  ```
+
+  ### 根本问题诊断与修复
+
+  #### canOperate函数的逻辑缺陷
+  **原有问题代码**：
+  ```typescript
+  const canOperate = (requiredStep: string, requiredRole?: string) => {
+    if (!currentUser) return false;
+    
+    // 检查是否是当前步骤
+    if (purchaseData.current_step !== requiredStep) return false;
+    
+    // 检查角色权限
+    if (requiredRole && currentUser.role !== requiredRole) return false;
+    
+    return true;
+  };
+  ```
+
+  **问题分析**：
+  - 只检查工作流步骤是否匹配（`purchaseData.current_step !== requiredStep`）
+  - 未检查用户角色是否有权限操作该步骤
+  - `canOperate('dept_manager')` 对采购员也返回true，因为当前步骤确实是dept_manager
+  - 导致采购员在部门主管审批阶段也能看到部门主管的操作按钮
+
+  #### 系统性修复方案
+  **核心思想**：建立步骤与角色的严格映射关系
+  ```typescript
+  const canOperate = (requiredStep: string, requiredRole?: string) => {
+    if (!currentUser) return false;
+    
+    // 检查是否是当前步骤
+    if (purchaseData.current_step !== requiredStep) return false;
+    
+    // 检查角色权限 - 根据步骤自动匹配角色
+    const stepRoleMap: { [key: string]: string } = {
+      'project_manager': 'project_manager',
+      'purchaser': 'purchaser',
+      'dept_manager': 'dept_manager',
+      'general_manager': 'general_manager'
+    };
+    
+    const expectedRole = requiredRole || stepRoleMap[requiredStep];
+    if (expectedRole && currentUser.role !== expectedRole) return false;
+    
+    return true;
+  };
+  ```
+
+  ### 完整功能实现
+
+  #### 1. 采购员询价后的按钮状态
+  **场景**：`price_quoted`状态，`dept_manager`步骤
+  ```typescript
+  // 采购员看到：灰色禁用按钮 + 提示信息
+  {status === 'price_quoted' && currentStep === 'dept_manager' && currentUser?.role === 'purchaser' && (
+    <>
+      <Tooltip title="此申购单已询价，节点已流转到部门主管处，等待部门主管审批">
+        <Button type="primary" icon={<CheckCircleOutlined />} disabled 
+                style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+          批准
+        </Button>
+      </Tooltip>
+      <Tooltip title="此申购单已询价，节点已流转到部门主管处，等待部门主管审批">
+        <Button danger icon={<CloseCircleOutlined />} disabled 
+                style={{ opacity: 0.5, cursor: 'not-allowed', marginLeft: 8 }}>
+          拒绝
+        </Button>
+      </Tooltip>
+    </>
+  )}
+  
+  // 部门主管看到：正常的可点击按钮
+  {status === 'price_quoted' && currentStep === 'dept_manager' && canOperate('dept_manager') && (
+    // 正常的批准/拒绝按钮
+  )}
+  ```
+
+  #### 2. 部门批准后的按钮状态
+  **场景**：`dept_approved`状态，`general_manager`步骤
+  ```typescript
+  // 采购员看到：灰色禁用的最终审批按钮
+  {status === 'dept_approved' && currentStep === 'general_manager' && currentUser?.role === 'purchaser' && (
+    <>
+      <Tooltip title="此申购单已通过部门审批，节点已流转到总经理处，等待总经理最终审批">
+        <Button type="primary" icon={<CrownOutlined />} disabled 
+                style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+          最终批准
+        </Button>
+      </Tooltip>
+    </>
+  )}
+  ```
+
+  ### 技术突破和经验总结
+
+  #### 1. 权限系统设计最佳实践
+  **重要认知**：工作流权限不仅要检查步骤，更要严格验证角色匹配
+  - **步骤检查**：确保操作发生在正确的工作流阶段
+  - **角色验证**：确保只有有权限的角色才能执行操作
+  - **自动映射**：建立步骤与角色的标准映射关系
+
+  #### 2. 用户体验设计理念
+  **核心原则**：让不可操作的按钮清晰可见但明确不可点击
+  - **视觉区分**：使用opacity和cursor样式区分可用/不可用状态
+  - **信息透明**：通过Tooltip提供详细的状态说明
+  - **避免困惑**：确保用户理解当前申购单所在的工作流节点
+
+  #### 3. Bug修复方法论
+  **分层诊断策略**：
+  ```
+  用户报告 → UI现象分析 → 权限逻辑检查 → 根本原因定位 → 系统性修复
+  ```
+  
+  **关键调试技能**：
+  - **重现问题**：使用不同角色账号测试相同场景
+  - **代码审查**：检查权限函数的逻辑完整性
+  - **边界测试**：验证所有可能的状态和角色组合
+
+  #### 4. 前端权限架构优化
+  **设计模式**：条件渲染 + 权限函数 + 状态映射
+  ```typescript
+  // 模式：角色 + 状态 + 权限函数的三重检查
+  {currentUser?.role === 'specific_role' && 
+   status === 'specific_status' && 
+   currentStep === 'specific_step' && (
+    <DisabledButtonWithTooltip />
+  )}
+  
+  {canOperate('specific_step') && (
+    <ActiveButton />
+  )}
+  ```
+
+  ### 修复成果和用户体验改善
+
+  #### 最终效果验证
+  - ✅ **采购员询价后**：只看到灰色禁用的批准/拒绝按钮，带有清晰提示
+  - ✅ **部门主管审批时**：看到正常的可点击按钮，可执行审批操作
+  - ✅ **无重复按钮**：每个场景下只显示一套按钮，避免用户困惑
+  - ✅ **状态提示完整**：所有禁用按钮都有详细的Tooltip说明
+
+  #### 用户体验提升量化
+  1. **操作明确性**：从模糊的可点击按钮 → 清晰的状态指示
+  2. **流程透明化**：用户能准确了解申购单当前所在节点
+  3. **错误操作减少**：避免点击无效按钮导致的用户困惑
+  4. **学习曲线降低**：新用户能快速理解工作流状态
+
+  **这次优化体现了从功能实现向用户体验优化的重要转变**，通过技术手段解决实际业务场景中的用户痛点，为工作流系统的易用性奠定了重要基础。
+
   ## 未来开发要点
   - **权限系统优先**：开发新功能前先考虑权限设计
   - **API调用统一**：所有前端API调用必须使用services/api.ts

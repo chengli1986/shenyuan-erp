@@ -2130,7 +2130,58 @@ python backend/tools/run_purchase_tests_standalone.py
 - **测试分类**：单元测试、集成测试、业务规则测试全覆盖
 - **执行环境**：开发环境和生产环境均稳定运行
 
+## 申购单工作流UI优化 (2025-09-01)
+
+### 工作流按钮状态优化
+基于用户反馈，优化了申购单详情页面的按钮显示逻辑，提升工作流状态的直观性和用户体验。
+
+#### 核心改进
+- ✅ **智能按钮状态**：根据申购单当前状态和用户角色动态显示按钮状态
+- ✅ **灰色禁用显示**：非当前操作人查看申购单时，相关按钮显示为灰色禁用状态
+- ✅ **友好提示信息**：通过Tooltip提供详细的工作流状态说明
+- ✅ **权限逻辑完善**：修复canOperate函数的角色检查逻辑，避免重复按钮显示
+
+#### 优化场景
+1. **采购员询价后**：
+   - 申购单状态：`price_quoted` (已询价)
+   - 当前节点：`dept_manager` (部门主管)
+   - 采购员查看：批准/拒绝按钮显示为灰色，提示"已流转到部门主管处"
+
+2. **部门批准后**：
+   - 申购单状态：`dept_approved` (部门已批准)  
+   - 当前节点：`general_manager` (总经理)
+   - 采购员查看：最终批准/拒绝按钮显示为灰色，提示"已流转到总经理处"
+
+#### 技术实现
+```typescript
+// 权限检查函数优化
+const canOperate = (requiredStep: string, requiredRole?: string) => {
+  const stepRoleMap = {
+    'project_manager': 'project_manager',
+    'purchaser': 'purchaser',
+    'dept_manager': 'dept_manager', 
+    'general_manager': 'general_manager'
+  };
+  
+  const expectedRole = requiredRole || stepRoleMap[requiredStep];
+  return currentUser.role === expectedRole;
+};
+
+// 禁用按钮与提示
+<Tooltip title="此申购单已询价，节点已流转到部门主管处，等待部门主管审批">
+  <Button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+    批准
+  </Button>
+</Tooltip>
+```
+
+#### 用户体验提升
+- **状态透明化**：用户能清晰了解申购单当前所在的审批节点
+- **操作指引明确**：通过按钮状态和提示文字指导用户理解工作流程
+- **避免误操作**：禁用不可操作的按钮，减少用户困惑
+- **流程可视化**：结合WorkflowStatus组件提供完整的流程可视化
+
 ## 文档信息
 
-**最后更新**：2025-08-31  
-**版本**：1.4.0 - 测试系统全面优化，新增核心功能测试覆盖
+**最后更新**：2025-09-01  
+**版本**：1.5.0 - 申购单工作流UI优化，按钮状态智能显示
