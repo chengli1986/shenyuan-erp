@@ -81,8 +81,16 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
     // 检查是否是当前步骤
     if (purchaseData.current_step !== requiredStep) return false;
     
-    // 检查角色权限
-    if (requiredRole && currentUser.role !== requiredRole) return false;
+    // 检查角色权限 - 根据步骤自动匹配角色
+    const stepRoleMap: { [key: string]: string } = {
+      'project_manager': 'project_manager',
+      'purchaser': 'purchaser',
+      'dept_manager': 'dept_manager',
+      'general_manager': 'general_manager'
+    };
+    
+    const expectedRole = requiredRole || stepRoleMap[requiredStep];
+    if (expectedRole && currentUser.role !== expectedRole) return false;
     
     return true;
   };
