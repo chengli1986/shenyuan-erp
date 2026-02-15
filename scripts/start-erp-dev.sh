@@ -7,7 +7,7 @@ echo "======================================"
 echo ""
 
 # 显示服务器信息
-echo "服务器公网IP: 18.219.25.24"
+echo "服务器公网IP: 18.218.95.233"
 echo ""
 
 # 启动后端服务
@@ -18,7 +18,7 @@ echo "   启动FastAPI服务..."
 nohup bash -c 'source venv/bin/activate && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload' > backend.log 2>&1 &
 BACKEND_PID=$!
 echo "   后端服务已启动 (PID: $BACKEND_PID)"
-echo "   后端地址: http://18.219.25.24:8000"
+echo "   后端地址: http://18.218.95.233:8000"
 echo ""
 
 # 等待后端启动
@@ -47,8 +47,8 @@ echo "✅ 系统启动完成（开发模式）！"
 echo "======================================"
 echo ""
 echo "访问方式："
-echo "前端界面: http://18.219.25.24:3000"
-echo "后端API文档: http://18.219.25.24:8000/docs"
+echo "前端界面: http://18.218.95.233:3000"
+echo "后端API文档: http://18.218.95.233:8000/docs"
 echo ""
 echo "查看日志："
 echo "后端日志: tail -f /home/ubuntu/shenyuan-erp/backend/backend.log"

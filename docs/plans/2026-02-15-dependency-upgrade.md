@@ -351,12 +351,12 @@ PORT=3000
 
 Update `frontend/.env.development`:
 ```
-VITE_API_BASE_URL=http://18.219.25.24:8000
+VITE_API_BASE_URL=http://18.218.95.233:8000
 ```
 
 Update `frontend/.env.production`:
 ```
-VITE_API_BASE_URL=http://18.219.25.24:8000
+VITE_API_BASE_URL=http://18.218.95.233:8000
 ```
 
 **Step 9: Update package.json scripts**
@@ -545,7 +545,7 @@ if ! command -v serve &> /dev/null; then
     npm install -g serve
 fi
 export HOST=0.0.0.0
-export REACT_APP_API_BASE_URL=http://18.219.25.24:8000
+export REACT_APP_API_BASE_URL=http://18.218.95.233:8000
 nohup /home/ubuntu/.npm-global/bin/serve -s build -l tcp://0.0.0.0:8080 > frontend.log 2>&1 &
 ```
 

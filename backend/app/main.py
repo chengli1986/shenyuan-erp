@@ -5,6 +5,7 @@ FastAPI主程序入口 - 包含项目管理API
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -40,13 +41,33 @@ async def lifespan(app: FastAPI):
     stop_test_scheduler()
     scheduler_task.cancel()
 
-# 创建FastAPI应用实例
+# 创建FastAPI应用实例（禁用默认docs，使用自定义CDN）
 app = FastAPI(
     title="弱电工程ERP系统",
     description="专为弱电工程公司设计的ERP系统",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
 )
+
+# 自定义Swagger UI，使用unpkg CDN（国内可访问）
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " - Swagger UI",
+        swagger_js_url="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js",
+        swagger_css_url="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css",
+    )
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_html():
+    return get_redoc_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " - ReDoc",
+        redoc_js_url="https://unpkg.com/redoc@next/bundles/redoc.standalone.js",
+    )
 
 # 配置CORS中间件
 app.add_middleware(

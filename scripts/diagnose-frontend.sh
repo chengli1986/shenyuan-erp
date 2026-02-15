@@ -25,7 +25,7 @@ curl -I http://0.0.0.0:3000
 echo ""
 
 echo "6. 测试公网IP访问（从本地）..."
-curl -I http://18.219.25.24:3000
+curl -I http://18.218.95.233:3000
 echo ""
 
 echo "7. 检查iptables规则..."

@@ -290,7 +290,7 @@ def create_workflow_test_data():
     print(f"   2. 工作流历史记录功能 - 点击'工作流历史'按钮")
     print(f"   3. 不同角色的操作权限 - 登录不同用户查看")
     print(f"   4. 工作流按钮和操作流程 - 提交、询价、审批等")
-    print(f"\n📱 访问地址: http://localhost:3000 或 http://18.219.25.24:3000")
+    print(f"\n📱 访问地址: http://localhost:3000 或 http://18.218.95.233:3000")
 
 if __name__ == "__main__":
     create_workflow_test_data()
