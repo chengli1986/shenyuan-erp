@@ -4,7 +4,7 @@ from pydantic import ConfigDict
 class Settings(BaseSettings):
     app_name: str = "弱电工程ERP系统"
     version: str = "1.0.0"
-    debug: bool = True
+    debug: bool = False
 
     # 数据库配置（暂时用SQLite）
     database_url: str = "sqlite:///./erp_test.db"

@@ -251,7 +251,7 @@ async def upload_contract_excel(
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
-        except:
+        except (OSError, IOError):
             pass
         
         error_msg = f"解析Excel文件失败: {str(e)}"
