@@ -33,15 +33,12 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 echo "   构建生产版本..."
-npm run build
+npx vite build
 echo "   使用serve启动生产服务器..."
-# 先安装serve如果没有
 if ! command -v serve &> /dev/null; then
     npm install -g serve
 fi
-export HOST=0.0.0.0
-export REACT_APP_API_BASE_URL=http://18.219.25.24:8000
-nohup /home/ubuntu/.npm-global/bin/serve -s build -l tcp://0.0.0.0:8080 > frontend.log 2>&1 &
+nohup /home/ubuntu/.npm-global/bin/serve -s dist -l tcp://0.0.0.0:8080 > frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "   前端服务已启动 (PID: $FRONTEND_PID)"
 echo ""

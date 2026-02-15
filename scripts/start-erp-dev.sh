@@ -32,11 +32,8 @@ if [ ! -d "node_modules" ]; then
     echo "   安装前端依赖..."
     npm install
 fi
-echo "   启动React开发服务器..."
-export HOST=0.0.0.0
-export PORT=3000
-export REACT_APP_API_BASE_URL=http://localhost:8000
-nohup npm start > frontend.log 2>&1 &
+echo "   启动Vite开发服务器..."
+nohup npx vite --host 0.0.0.0 --port 3000 > frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "   前端服务已启动 (PID: $FRONTEND_PID)"
 echo ""
