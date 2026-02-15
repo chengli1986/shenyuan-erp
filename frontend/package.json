@@ -10,7 +10,7 @@
     "@testing-library/user-event": "^13.5.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
-    "antd": "^6.3.0",
+    "antd": "^5.29.3",
     "axios": "^1.13.5",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.13",
@@ -29,8 +29,8 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^25.2.3",
     "@types/uuid": "^10.0.0",
-    "typescript": "~5.7",
     "@vitejs/plugin-react": "^5.1.4",
+    "typescript": "~5.7",
     "vite": "^7.3.1",
     "vite-tsconfig-paths": "^6.1.1"
   }
