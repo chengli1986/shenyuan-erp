@@ -7,7 +7,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 import asyncio
+import logging
 from contextlib import asynccontextmanager
+
+logger = logging.getLogger(__name__)
 
 # 导入配置和数据库
 from app.core.config import settings
@@ -26,18 +29,18 @@ from app.core.test_scheduler import start_test_scheduler, stop_test_scheduler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 启动时执行
-    print("正在创建数据库表...")
+    logger.info("正在创建数据库表...")
     Base.metadata.create_all(bind=engine)
-    print("数据库表创建完成！")
+    logger.info("数据库表创建完成！")
     
     # 启动测试调度器（后台任务）
-    print("启动测试调度器...")
+    logger.info("启动测试调度器...")
     scheduler_task = asyncio.create_task(start_test_scheduler())
     
     yield
     
     # 关闭时执行
-    print("正在关闭测试调度器...")
+    logger.info("正在关闭测试调度器...")
     stop_test_scheduler()
     scheduler_task.cancel()
 
