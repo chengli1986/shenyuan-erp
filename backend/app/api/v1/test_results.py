@@ -87,7 +87,7 @@ def get_test_run_detail(
 
 @router.post("/runs/trigger")
 async def trigger_test_run(
-    test_type: str = Query(..., regex="^(all|unit|integration)$"),
+    test_type: str = Query(..., pattern="^(all|unit|integration)$"),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
