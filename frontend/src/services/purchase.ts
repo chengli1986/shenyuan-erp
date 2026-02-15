@@ -8,7 +8,6 @@ import {
   PurchaseRequestUpdate,
   PurchaseRequestWithItems,
   PurchaseRequestListResponse,
-  PurchaseRequestSubmit,
   PurchaseRequestQuote,
   PurchaseRequestApprove,
   Supplier,
@@ -21,18 +20,6 @@ import {
 } from '../types/purchase';
 
 import api from './api';
-
-// 使用相对路径通过代理访问API
-const API_BASE = '/api/v1';
-
-// 通用请求处理函数
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`HTTP ${response.status}: ${errorText}`);
-  }
-  return response.json();
-}
 
 // ============================
 // 合同清单物料查询 API
@@ -70,8 +57,8 @@ export async function getContractItemDetails(
   remaining_quantity: number;
   can_purchase: boolean;
 }> {
-  const response = await fetch(`${API_BASE}/purchases/contract-items/${itemId}/details`);
-  return handleResponse(response);
+  const response = await api.get(`purchases/contract-items/${itemId}/details`);
+  return response.data;
 }
 
 /**
@@ -131,7 +118,7 @@ export async function getPurchaseRequests(params?: {
   search?: string;
 }): Promise<PurchaseRequestListResponse> {
   const queryString = new URLSearchParams();
-  
+
   if (params?.page) queryString.append('page', params.page.toString());
   if (params?.size) queryString.append('size', params.size.toString());
   if (params?.project_id) queryString.append('project_id', params.project_id.toString());
@@ -139,17 +126,16 @@ export async function getPurchaseRequests(params?: {
   if (params?.requester_id) queryString.append('requester_id', params.requester_id.toString());
   if (params?.search) queryString.append('search', params.search);
 
-  const url = `${API_BASE}/purchases/${queryString.toString() ? `?${queryString}` : ''}`;
-  const response = await fetch(url);
-  return handleResponse<PurchaseRequestListResponse>(response);
+  const response = await api.get(`purchases/${queryString.toString() ? `?${queryString}` : ''}`);
+  return response.data;
 }
 
 /**
  * 获取申购单详情
  */
 export async function getPurchaseRequest(requestId: number): Promise<PurchaseRequestWithItems> {
-  const response = await fetch(`${API_BASE}/purchases/${requestId}`);
-  return handleResponse<PurchaseRequestWithItems>(response);
+  const response = await api.get(`purchases/${requestId}`);
+  return response.data;
 }
 
 /**
@@ -169,28 +155,16 @@ export async function updatePurchaseRequest(
   requestId: number,
   updateData: PurchaseRequestUpdate
 ): Promise<PurchaseRequest> {
-  const response = await fetch(`${API_BASE}/purchases/${requestId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(updateData),
-  });
-  return handleResponse<PurchaseRequest>(response);
+  const response = await api.put(`purchases/${requestId}`, updateData);
+  return response.data;
 }
 
 /**
  * 提交申购单
  */
 export async function submitPurchaseRequest(requestId: number): Promise<PurchaseRequest> {
-  const response = await fetch(`${API_BASE}/purchases/${requestId}/submit`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({}),
-  });
-  return handleResponse<PurchaseRequest>(response);
+  const response = await api.post(`purchases/${requestId}/submit`, {});
+  return response.data;
 }
 
 /**
@@ -200,14 +174,8 @@ export async function quotePurchaseRequest(
   requestId: number,
   quoteData: PurchaseRequestQuote
 ): Promise<PurchaseRequest> {
-  const response = await fetch(`${API_BASE}/purchases/${requestId}/quote`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(quoteData),
-  });
-  return handleResponse<PurchaseRequest>(response);
+  const response = await api.post(`purchases/${requestId}/quote`, quoteData);
+  return response.data;
 }
 
 /**
@@ -217,28 +185,20 @@ export async function approvePurchaseRequest(
   requestId: number,
   approvalData: PurchaseRequestApprove
 ): Promise<PurchaseRequest> {
-  const response = await fetch(`${API_BASE}/purchases/${requestId}/approve`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(approvalData),
-  });
-  return handleResponse<PurchaseRequest>(response);
+  const response = await api.post(`purchases/${requestId}/approve`, approvalData);
+  return response.data;
 }
 
 /**
  * 删除申购单
  */
 export async function deletePurchaseRequest(requestId: number): Promise<{ detail: string }> {
-  const response = await fetch(`${API_BASE}/purchases/${requestId}`, {
-    method: 'DELETE',
-  });
-  return handleResponse<{ detail: string }>(response);
+  const response = await api.delete(`purchases/${requestId}`);
+  return response.data;
 }
 
 // ============================
-// 供应商管理 API  
+// 供应商管理 API
 // ============================
 
 /**
@@ -251,29 +211,22 @@ export async function getSuppliers(params?: {
   is_active?: boolean;
 }): Promise<SupplierListResponse> {
   const queryString = new URLSearchParams();
-  
+
   if (params?.page) queryString.append('page', params.page.toString());
   if (params?.size) queryString.append('size', params.size.toString());
   if (params?.search) queryString.append('search', params.search);
   if (params?.is_active !== undefined) queryString.append('is_active', params.is_active.toString());
 
-  const url = `${API_BASE}/purchases/suppliers/${queryString.toString() ? `?${queryString}` : ''}`;
-  const response = await fetch(url);
-  return handleResponse<SupplierListResponse>(response);
+  const response = await api.get(`purchases/suppliers/${queryString.toString() ? `?${queryString}` : ''}`);
+  return response.data;
 }
 
 /**
  * 创建供应商
  */
 export async function createSupplier(supplierData: SupplierCreate): Promise<Supplier> {
-  const response = await fetch(`${API_BASE}/purchases/suppliers/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(supplierData),
-  });
-  return handleResponse<Supplier>(response);
+  const response = await api.post('purchases/suppliers/', supplierData);
+  return response.data;
 }
 
 /**
@@ -283,14 +236,8 @@ export async function updateSupplier(
   supplierId: number,
   updateData: SupplierUpdate
 ): Promise<Supplier> {
-  const response = await fetch(`${API_BASE}/purchases/suppliers/${supplierId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(updateData),
-  });
-  return handleResponse<Supplier>(response);
+  const response = await api.put(`purchases/suppliers/${supplierId}`, updateData);
+  return response.data;
 }
 
 // ============================
@@ -303,10 +250,8 @@ export async function updateSupplier(
 export async function getAuxiliaryRecommendations(
   mainMaterialId: number
 ): Promise<AuxiliaryRecommendation[]> {
-  const response = await fetch(
-    `${API_BASE}/purchases/auxiliary/recommend?main_material_id=${mainMaterialId}`
-  );
-  return handleResponse<AuxiliaryRecommendation[]>(response);
+  const response = await api.get(`purchases/auxiliary/recommend?main_material_id=${mainMaterialId}`);
+  return response.data;
 }
 
 /**
@@ -315,14 +260,8 @@ export async function getAuxiliaryRecommendations(
 export async function createAuxiliaryTemplate(
   templateData: AuxiliaryTemplateCreate
 ): Promise<AuxiliaryTemplate> {
-  const response = await fetch(`${API_BASE}/purchases/auxiliary/templates/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(templateData),
-  });
-  return handleResponse<AuxiliaryTemplate>(response);
+  const response = await api.post('purchases/auxiliary/templates/', templateData);
+  return response.data;
 }
 
 // ============================
