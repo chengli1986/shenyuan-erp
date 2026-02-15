@@ -417,7 +417,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         if (record.item_type === 'main' && record.contract_item_id) {
           // 如果有剩余数量信息则显示，否则显示加载中
           if (value !== undefined && value !== null) {
-            const remaining = parseFloat(value);
+            const remaining = typeof value === 'string' ? parseFloat(value) : value;
             return (
               <span style={{ color: remaining <= 0 ? '#ff4d4f' : remaining <= 10 ? '#faad14' : '#52c41a' }}>
                 {remaining.toFixed(2)}
@@ -466,7 +466,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
             'MONTHLY': '月结',
             'INSTALLMENT': '分期付款'
           };
-          return paymentMethods[paymentMethod] || paymentMethod || '-';
+          return (paymentMethod ? paymentMethods[paymentMethod] : undefined) || paymentMethod || '-';
         }
       },
       {
@@ -580,7 +580,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
           {purchaseData.system_category || '-'}
         </Descriptions.Item>
         <Descriptions.Item label="总金额">
-          {purchaseData.total_amount ? `¥${parseFloat(purchaseData.total_amount).toLocaleString()}` : '-'}
+          {purchaseData.total_amount ? `¥${Number(purchaseData.total_amount).toLocaleString()}` : '-'}
         </Descriptions.Item>
         <Descriptions.Item label="当前步骤">
           {getStepLabel(purchaseData.current_step)}

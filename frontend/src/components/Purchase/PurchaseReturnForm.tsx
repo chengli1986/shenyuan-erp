@@ -43,7 +43,7 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
         approval_notes: values.return_reason
       };
 
-      await api.post(`purchases/${purchaseData.id}/return`, returnData);
+      await api.post(`purchases/${purchaseData!.id}/return`, returnData);
       
       // 根据当前用户角色显示正确的退回消息
       const returnMessage = currentUser?.role === 'project_manager' 

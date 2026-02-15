@@ -26,8 +26,8 @@ const { Title, Text } = Typography;
 interface PurchaseItem {
   id: number;
   item_name: string;
-  specification: string;
-  brand: string;
+  specification?: string;
+  brand?: string;
   unit: string;
   quantity: number;
   unit_price?: number;

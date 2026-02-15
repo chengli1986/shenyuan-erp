@@ -16,6 +16,7 @@ import SimplePurchaseDetail from './SimplePurchaseDetail';
 import PurchaseEditForm from './PurchaseEditForm';
 import WorkflowStatus, { PurchaseStatus, WorkflowStep } from '../../components/Purchase/WorkflowStatus';
 import api from '../../services/api';
+import type { PurchaseDetailData } from '../../types/purchase';
 
 // 申购单类型定义（支持工作流）
 interface SimplePurchaseRequest {
@@ -42,12 +43,12 @@ const SimplePurchaseList: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [detailVisible, setDetailVisible] = useState(false);
-  const [currentDetail, setCurrentDetail] = useState<SimplePurchaseRequest | null>(null);
+  const [currentDetail, setCurrentDetail] = useState<PurchaseDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [editVisible, setEditVisible] = useState(false);
-  const [currentEdit, setCurrentEdit] = useState<SimplePurchaseRequest | null>(null);
+  const [currentEdit, setCurrentEdit] = useState<PurchaseDetailData | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
   // 加载申购单列表 - 支持分页
@@ -194,7 +195,7 @@ const SimplePurchaseList: React.FC = () => {
   };
 
   // 编辑申购单
-  const editPurchaseRequest = async (record: SimplePurchaseRequest) => {
+  const editPurchaseRequest = async (record: SimplePurchaseRequest | PurchaseDetailData) => {
     setEditLoading(true);
     try {
       const response = await api.get(`purchases/${record.id}`);

@@ -127,14 +127,14 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
           specification: item.specification,
           brand: item.brand_model || item.brand, // 兼容不同的字段名
           unit: item.unit,
-          quantity: parseFloat(item.quantity || '0'),
-          unit_price: item.unit_price ? parseFloat(item.unit_price) : undefined,
-          total_price: item.total_price ? parseFloat(item.total_price) : undefined,
-          item_type: item.item_type || 'auxiliary',
+          quantity: typeof item.quantity === 'string' ? parseFloat(item.quantity || '0') : (item.quantity || 0),
+          unit_price: item.unit_price ? (typeof item.unit_price === 'string' ? parseFloat(item.unit_price) : item.unit_price) : undefined,
+          total_price: item.total_price ? (typeof item.total_price === 'string' ? parseFloat(item.total_price) : item.total_price) : undefined,
+          item_type: (item.item_type === 'main' || item.item_type === 'auxiliary' ? item.item_type : 'auxiliary') as 'main' | 'auxiliary',
           remarks: item.remarks || '',
           // 对于主材，需要获取剩余数量信息
           remaining_quantity: item.remaining_quantity, // 从后端数据中获取
-          max_quantity: item.max_quantity
+          max_quantity: undefined as number | undefined
         };
         
         return converted;
@@ -583,8 +583,9 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
       
     } catch (error: unknown) {
       console.error('保存申购单失败:', error);
-      if (error.response?.data?.detail) {
-        message.error(`保存失败: ${error.response.data.detail}`);
+      const axiosError = error as { response?: { data?: { detail?: string } } };
+      if (axiosError.response?.data?.detail) {
+        message.error(`保存失败: ${axiosError.response.data.detail}`);
       } else {
         message.error('保存失败，请重试');
       }
