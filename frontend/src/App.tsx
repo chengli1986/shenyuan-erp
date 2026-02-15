@@ -160,8 +160,8 @@ function AppContent() {
                         key: 'logout',
                         label: '退出登录',
                         icon: <LogoutOutlined />,
-                        onClick: () => {
-                          authService.logout();
+                        onClick: async () => {
+                          await authService.logout();
                           setCurrentUser(null);
                         },
                       },

@@ -5,28 +5,33 @@
 from datetime import timedelta
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user
+from app.core.config import settings
 from app.core.security import (
     authenticate_user,
     create_access_token,
     get_password_hash,
-    ACCESS_TOKEN_EXPIRE_MINUTES
 )
 from app.models.user import User, UserRole
 from app.schemas.auth import Token, UserLogin, UserRegister, UserResponse
 
 router = APIRouter()
 
+# Cookie配置常量
+COOKIE_NAME = "access_token"
+COOKIE_MAX_AGE = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # 秒
 
-@router.post("/login", response_model=Token)
+
+@router.post("/login")
 def login(
     db: Session = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
-    """用户登录"""
+    """用户登录 - 通过HttpOnly Cookie设置JWT"""
     user = authenticate_user(form_data.username, form_data.password, db)
     if not user:
         raise HTTPException(
@@ -39,21 +44,21 @@ def login(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="用户已被禁用"
         )
-    
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         subject=user.id, expires_delta=access_token_expires
     )
-    
+
     # 更新最后登录时间
     from sqlalchemy.sql import func
     user.last_login = func.now()
     db.commit()
-    
-    return {
-        "access_token": access_token,
+
+    # 构建响应数据（不再返回token给前端）
+    response_data = {
         "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # 转换为秒
+        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         "user": {
             "id": user.id,
             "username": user.username,
@@ -64,6 +69,32 @@ def login(
             "can_view_price": user.can_view_price()
         }
     }
+
+    # 通过HttpOnly Cookie设置JWT token
+    response = JSONResponse(content=response_data)
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=access_token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,       # JavaScript无法读取
+        samesite="lax",      # 防止CSRF
+        secure=False,        # 开发环境用HTTP；生产环境改为True
+        path="/",            # 所有路径都发送cookie
+    )
+    return response
+
+
+@router.post("/logout")
+def logout() -> Any:
+    """用户登出 - 清除HttpOnly Cookie"""
+    response = JSONResponse(content={"message": "登出成功"})
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite="lax",
+    )
+    return response
 
 
 @router.post("/register", response_model=UserResponse)

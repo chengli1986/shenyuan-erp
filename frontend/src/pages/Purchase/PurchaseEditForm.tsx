@@ -23,6 +23,7 @@ import {
 import api from '../../services/api';
 import { AuthService } from '../../services/auth';
 import dayjs, { Dayjs } from 'dayjs';
+import type { PurchaseEditItem as PurchaseEditItemType, SpecificationOption as SpecificationOptionType, SystemCategoryOption, PurchaseDetailItem } from '../../types/purchase';
 
 // 生成唯一ID的简单函数，替代uuid
 const generateId = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -83,7 +84,7 @@ interface PurchaseRequest {
   project_name?: string;
   required_date?: string;
   remarks?: string;
-  items?: any[];
+  items?: PurchaseDetailItem[];
 }
 
 interface PurchaseEditFormProps {
@@ -116,7 +117,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
       });
 
       // 转换items数据格式
-      const convertedItems = (purchaseData.items || []).map((item: any, index: number) => {
+      const convertedItems = (purchaseData.items || []).map((item: PurchaseDetailItem, index: number) => {
         const converted = {
           id: generateId(),
           contract_item_id: item.contract_item_id,
@@ -213,7 +214,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
     try {
       const response = await api.get('projects/');
       setProjects(response.data.items || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载项目列表失败:', error);
       message.error('加载项目列表失败');
     }
@@ -223,7 +224,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
     try {
       const response = await api.get(`purchases/material-names/by-project/${projectId}`);
       setMaterialNames(response.data.material_names || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载物料名称失败:', error);
     }
   };
@@ -234,7 +235,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
         params: { project_id: projectId, item_name: materialName }
       });
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载规格信息失败:', error);
       return { specifications: [] };
     }
@@ -246,7 +247,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
         params: { project_id: projectId, material_name: materialName }
       });
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载系统分类失败:', error);
       return { categories: [] };
     }
@@ -264,7 +265,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
       } else {
         return [];
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载项目系统分类失败:', error);
       return [];
     }
@@ -286,7 +287,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
         }
         return item;
       }));
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载合同清单项详情失败:', error);
     }
   };
@@ -296,7 +297,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
     try {
       const response = await api.get(`purchases/system-categories/by-project/${projectId}`);
       return response.data.categories;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('获取项目系统分类失败:', error);
       throw error;
     }
@@ -468,7 +469,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
     setItems(items.filter(item => item.id !== itemId));
   };
 
-  const updateItem = (itemId: string, field: keyof PurchaseEditItem, value: any) => {
+  const updateItem = (itemId: string, field: keyof PurchaseEditItem, value: string | number | boolean | undefined | null) => {
     setItems(items => items.map(item => {
       if (item.id === itemId) {
         return { ...item, [field]: value };
@@ -580,7 +581,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
       message.success('申购单更新成功');
       onCancel();
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('保存申购单失败:', error);
       if (error.response?.data?.detail) {
         message.error(`保存失败: ${error.response.data.detail}`);
@@ -674,7 +675,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
     {
       title: '序号',
       width: 60,
-      render: (_: any, __: any, index: number) => index + 1
+      render: (_: unknown, __: unknown, index: number) => index + 1
     },
     {
       title: '类型',
@@ -705,7 +706,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
               placeholder="请选择物料名称"
               style={{ width: '100%' }}
               showSearch
-              filterOption={(input, option: any) =>
+              filterOption={(input, option: { children?: string } | undefined) =>
                 (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
               }
               allowClear
@@ -811,7 +812,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
               }}
               allowClear
               showSearch
-              filterOption={(input, option: any) =>
+              filterOption={(input, option: { children?: string } | undefined) =>
                 (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
               }
             >
@@ -935,7 +936,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
     {
       title: '操作',
       width: 80,
-      render: (_: any, record: PurchaseEditItem) => (
+      render: (_: unknown, record: PurchaseEditItem) => (
         <Popconfirm
           title="确定删除这一项吗？"
           onConfirm={() => removeItem(record.id)}
@@ -977,7 +978,7 @@ const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({
               placeholder="选择项目"
               disabled={!!purchaseData?.project_id}
               showSearch
-              filterOption={(input, option: any) =>
+              filterOption={(input, option: { children?: string } | undefined) =>
                 (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
               }
             >

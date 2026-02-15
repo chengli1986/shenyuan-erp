@@ -17,6 +17,7 @@ import {
 } from 'antd';
 import { DollarOutlined } from '@ant-design/icons';
 import api from '../../services/api';
+import { PurchaseDetailData } from '../../types/purchase';
 import dayjs from 'dayjs';
 
 const { TextArea } = Input;
@@ -40,7 +41,7 @@ interface PurchaseItem {
 
 interface PurchaseQuoteFormProps {
   visible: boolean;
-  purchaseData: any;
+  purchaseData: PurchaseDetailData | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -125,10 +126,7 @@ const PurchaseQuoteForm: React.FC<PurchaseQuoteFormProps> = ({
         }
       }
 
-      console.log('🚀 [React] 开始提交询价数据:', JSON.stringify(quoteData, null, 2));
-      console.log('🔗 [React] API调用地址:', `purchases/${purchaseData.id}/quote`);
-      console.log('🔑 [React] 当前token存在:', !!localStorage.getItem('access_token'));
-      await api.post(`purchases/${purchaseData.id}/quote`, quoteData);
+      await api.post(`purchases/${purchaseData?.id}/quote`, quoteData);
       message.success('询价完成，已提交部门主管审批');
       onSuccess();
       onClose();

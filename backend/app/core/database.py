@@ -7,17 +7,17 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
+from app.core.config import settings
 
-# 数据库连接URL - 暂时使用SQLite进行开发测试
-# SQLite是一个文件数据库，不需要安装PostgreSQL
-DATABASE_URL = "sqlite:///./erp_test.db"
+# 从统一配置中读取数据库URL
+DATABASE_URL = settings.database_url
 
 # 创建数据库引擎
-engine = create_engine(
-    DATABASE_URL, 
-    connect_args={"check_same_thread": False}  # SQLite需要这个参数
-)
+connect_args = {}
+if DATABASE_URL.startswith("sqlite"):
+    connect_args["check_same_thread"] = False  # SQLite需要这个参数
+
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
 
 # 创建会话工厂
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

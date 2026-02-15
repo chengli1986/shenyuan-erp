@@ -312,6 +312,107 @@ export interface PurchaseStatistics {
   auxiliary_material_amount: number;
 }
 
+// 申购单详情数据（API返回的完整数据）
+export interface PurchaseDetailData {
+  id: number;
+  request_code: string;
+  project_id: number;
+  project_name?: string;
+  requester_id: number;
+  requester_name?: string;
+  request_date: string;
+  required_date?: string;
+  status: string;
+  current_step?: string;
+  current_approver_id?: number;
+  total_amount?: number;
+  approval_notes?: string;
+  remarks?: string;
+  payment_method?: string;
+  estimated_delivery_date?: string;
+  quote_date?: string;
+  system_category?: string;
+  created_at: string;
+  updated_at?: string;
+  items: PurchaseDetailItem[];
+}
+
+// 申购明细项（API返回的完整数据，含询价信息）
+export interface PurchaseDetailItem {
+  id: number;
+  request_id: number;
+  contract_item_id?: number;
+  system_category_id?: number;
+  system_category_name?: string;
+  item_name: string;
+  specification?: string;
+  brand_model?: string;
+  brand?: string;
+  unit: string;
+  quantity: number;
+  item_type: string;
+  unit_price?: number;
+  total_price?: number;
+  supplier_name?: string;
+  supplier_contact?: string;
+  supplier_info?: { payment_method?: string; [key: string]: string | undefined };
+  payment_method?: string;
+  estimated_delivery?: string;
+  estimated_delivery_date?: string;
+  remaining_quantity?: number;
+  received_quantity?: number;
+  status?: string;
+  remarks?: string;
+  availableSystemCategories?: SystemCategoryOption[];
+}
+
+// 系统分类选项
+export interface SystemCategoryOption {
+  id: number;
+  category_name: string;
+  category_code?: string;
+  description?: string;
+  is_suggested?: boolean;
+  items_count?: number;
+}
+
+// 规格选项
+export interface SpecificationOption {
+  specification: string;
+  brand_model: string;
+  unit: string;
+  remaining_quantity: number;
+  contract_item_id: number;
+  total_quantity: number;
+}
+
+// 申购单编辑表单项
+export interface PurchaseEditItem {
+  id: string;
+  item_type: string;
+  item_name: string;
+  specification: string;
+  brand_model: string;
+  unit: string;
+  quantity: number;
+  unit_price?: number;
+  total_price?: number;
+  remarks: string;
+  contract_item_id?: number;
+  system_category_id?: number;
+  system_category_name?: string;
+  remaining_quantity?: number;
+  max_quantity?: number;
+  availableSpecifications?: SpecificationOption[];
+  availableSystemCategories?: SystemCategoryOption[];
+}
+
+// API错误响应
+export interface ApiErrorResponse {
+  detail?: string;
+  message?: string;
+}
+
 // 查询参数类型
 export interface PurchaseRequestQueryParams {
   page?: number;

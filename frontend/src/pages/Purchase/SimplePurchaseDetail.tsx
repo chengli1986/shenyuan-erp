@@ -28,13 +28,24 @@ import WorkflowHistory from '../../components/Purchase/WorkflowHistory';
 import PurchaseQuoteForm from '../../components/Purchase/PurchaseQuoteForm';
 import PurchaseReturnForm from '../../components/Purchase/PurchaseReturnForm';
 import api from '../../services/api';
+import { PurchaseDetailData, PurchaseDetailItem } from '../../types/purchase';
+import axios from 'axios';
+
+// 从unknown错误中提取消息
+const getErrorMessage = (error: unknown, fallback: string = '操作失败'): string => {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.detail || error.message || fallback;
+  }
+  if (error instanceof Error) return error.message;
+  return fallback;
+};
 
 interface SimplePurchaseDetailProps {
   visible: boolean;
-  purchaseData: any;
+  purchaseData: PurchaseDetailData | null;
   onClose: () => void;
   onRefresh?: () => void; // 刷新列表的回调函数
-  onEdit?: (purchaseData: any) => void; // 编辑申购单的回调函数
+  onEdit?: (purchaseData: PurchaseDetailData) => void; // 编辑申购单的回调函数
 }
 
 const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
@@ -103,9 +114,9 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
       message.success('申购单提交成功');
       onRefresh?.();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('提交申购单失败:', error);
-      message.error(`提交失败: ${error.response?.data?.detail || error.message || '网络连接失败'}`);
+      message.error(`提交失败: ${getErrorMessage(error, '网络连接失败')}`);
     } finally {
       setLoading(false);
     }
@@ -155,20 +166,13 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         approval_notes: notes
       };
 
-      console.log('🏢 [部门审批] 发送数据:', approvalData);
       await api.post(`purchases/${purchaseData.id}/dept-approve`, approvalData);
-      console.log('🏢 [部门审批] API调用成功');
       message.success(approved ? '审批通过' : '审批拒绝');
       onRefresh?.();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('🏢 [部门审批] 审批失败:', error);
-      console.error('🏢 [部门审批] 错误详情:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message
-      });
-      message.error(`审批失败: ${error.response?.data?.detail || error.message || '网络连接失败'}`);
+      message.error(`审批失败: ${getErrorMessage(error, '网络连接失败')}`);
     } finally {
       setLoading(false);
     }
@@ -184,20 +188,13 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         approval_notes: notes
       };
 
-      console.log('👑 [总经理审批] 发送数据:', approvalData);
       await api.post(`purchases/${purchaseData.id}/final-approve`, approvalData);
-      console.log('👑 [总经理审批] API调用成功');
       message.success(approved ? '最终审批通过' : '最终审批拒绝');
       onRefresh?.();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('👑 [总经理审批] 最终审批失败:', error);
-      console.error('👑 [总经理审批] 错误详情:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message
-      });
-      message.error(`最终审批失败: ${error.response?.data?.detail || error.message || '网络连接失败'}`);
+      message.error(`最终审批失败: ${getErrorMessage(error, '网络连接失败')}`);
     } finally {
       setLoading(false);
     }
@@ -290,10 +287,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
               <Button
                 type="primary"
                 icon={<CheckCircleOutlined />}
-                onClick={() => {
-                  console.log('🔘 [按钮点击] 部门批准按钮被点击');
-                  openApprovalModal('approve');
-                }}
+                onClick={() => openApprovalModal('approve')}
                 loading={loading}
               >
                 批准
@@ -301,10 +295,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
               <Button
                 danger
                 icon={<CloseCircleOutlined />}
-                onClick={() => {
-                  console.log('🔘 [按钮点击] 部门拒绝按钮被点击');
-                  openApprovalModal('reject');
-                }}
+                onClick={() => openApprovalModal('reject')}
                 loading={loading}
               >
                 拒绝
@@ -344,10 +335,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
               <Button
                 type="primary"
                 icon={<CrownOutlined />}
-                onClick={() => {
-                  console.log('🔘 [按钮点击] 总经理最终批准按钮被点击');
-                  openApprovalModal('final_approve');
-                }}
+                onClick={() => openApprovalModal('final_approve')}
                 loading={loading}
               >
                 最终批准
@@ -355,10 +343,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
               <Button
                 danger
                 icon={<CloseCircleOutlined />}
-                onClick={() => {
-                  console.log('🔘 [按钮点击] 总经理最终拒绝按钮被点击');
-                  openApprovalModal('final_reject');
-                }}
+                onClick={() => openApprovalModal('final_reject')}
                 loading={loading}
               >
                 最终拒绝
@@ -379,7 +364,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
     {
       title: '序号',
       width: 60,
-      render: (_: any, __: any, index: number) => index + 1
+      render: (_: unknown, __: unknown, index: number) => index + 1
     },
     {
       title: '类型',
@@ -427,7 +412,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
       title: '剩余可申购',
       dataIndex: 'remaining_quantity',
       width: 110,
-      render: (value: any, record: any) => {
+      render: (value: number | undefined, record: PurchaseDetailItem) => {
         // 只有主材显示剩余可申购数量
         if (record.item_type === 'main' && record.contract_item_id) {
           // 如果有剩余数量信息则显示，否则显示加载中
@@ -468,7 +453,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         title: '付款方式',
         dataIndex: 'payment_method',
         width: 100,
-        render: (value: string, record: any) => {
+        render: (value: string, record: PurchaseDetailItem) => {
           // 正确的数据读取优先级：
           // 1. 物料级payment_method字段 
           // 2. supplier_info.payment_method (实际存储位置)
@@ -488,7 +473,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         title: '预计交货',
         dataIndex: 'estimated_delivery_date',
         width: 100,
-        render: (value: string, record: any) => {
+        render: (value: string, record: PurchaseDetailItem) => {
           // 正确的数据读取优先级：
           // 1. 物料级estimated_delivery_date字段
           // 2. estimated_delivery字段 (实际存储位置)

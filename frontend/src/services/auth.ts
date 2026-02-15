@@ -1,5 +1,7 @@
 /**
  * 认证服务
+ * Token通过HttpOnly Cookie管理，前端不再直接操作token
+ * localStorage仅保存非敏感的用户信息用于UI显示
  */
 
 import api from './api';
@@ -20,7 +22,6 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  access_token: string;
   token_type: string;
   expires_in: number;
   user: User;
@@ -38,7 +39,7 @@ export class AuthService {
   }
 
   constructor() {
-    // 从localStorage恢复用户信息
+    // 从localStorage恢复用户基本信息（非敏感，仅用于UI显示）
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
       this.currentUser = JSON.parse(savedUser);
@@ -56,24 +57,24 @@ export class AuthService {
       },
     });
 
-    const { access_token, user } = response.data;
-    
-    // 保存token和用户信息
-    localStorage.setItem('access_token', access_token);
+    const { user } = response.data;
+
+    // 仅保存用户基本信息用于UI显示（token已通过HttpOnly Cookie设置）
     localStorage.setItem('currentUser', JSON.stringify(user));
     this.currentUser = user;
-
-    // 设置API默认认证header
-    api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
     return response.data;
   }
 
-  logout(): void {
-    localStorage.removeItem('access_token');
+  async logout(): Promise<void> {
+    try {
+      // 调用后端登出接口清除HttpOnly Cookie
+      await api.post('/auth/logout');
+    } catch {
+      // 即使后端调用失败，也要清除前端状态
+    }
     localStorage.removeItem('currentUser');
     this.currentUser = null;
-    delete api.defaults.headers.common['Authorization'];
   }
 
   getCurrentUser(): User | null {
@@ -81,12 +82,8 @@ export class AuthService {
   }
 
   isLoggedIn(): boolean {
-    const token = localStorage.getItem('access_token');
-    return token !== null && this.currentUser !== null;
-  }
-
-  getToken(): string | null {
-    return localStorage.getItem('access_token');
+    // 通过用户信息判断是否已登录（token由cookie自动管理）
+    return this.currentUser !== null;
   }
 
   async refreshUserInfo(): Promise<User> {

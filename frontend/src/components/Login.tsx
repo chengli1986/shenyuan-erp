@@ -34,15 +34,16 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       await authService.login(values);
       message.success('登录成功');
       onLoginSuccess();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
-      message.error(error.response?.data?.detail || '登录失败，请检查用户名和密码');
+      const errDetail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      message.error(errDetail || '登录失败，请检查用户名和密码');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleQuickLogin = (account: any) => {
+  const handleQuickLogin = (account: { username: string; password: string; name: string }) => {
     onFinish({
       username: account.username,
       password: account.password,

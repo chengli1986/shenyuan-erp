@@ -252,30 +252,21 @@ const SystemTestDashboard: React.FC = () => {
               <Button
                 icon={<PlayCircleOutlined />}
                 type="primary"
-                onClick={() => {
-                  console.log('全部测试按钮点击');
-                  triggerTest('all');
-                }}
+                onClick={() => triggerTest('all')}
                 loading={refreshing}
               >
                 运行全部测试
               </Button>
               <Button
                 icon={<PlayCircleOutlined />}
-                onClick={() => {
-                  console.log('单元测试按钮点击');
-                  triggerTest('unit');
-                }}
+                onClick={() => triggerTest('unit')}
                 loading={refreshing}
               >
                 运行单元测试
               </Button>
               <Button
                 icon={<PlayCircleOutlined />}
-                onClick={() => {
-                  console.log('集成测试按钮点击');
-                  triggerTest('integration');
-                }}
+                onClick={() => triggerTest('integration')}
                 loading={refreshing}
               >
                 运行集成测试

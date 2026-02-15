@@ -3,23 +3,20 @@
  */
 
 import axios from 'axios';
-// 创建axios实例，使用相对路径通过代理（注意末尾斜杠）
+
+// 创建axios实例，使用相对路径通过代理
 const api = axios.create({
   baseURL: '/api/v1/',
   timeout: 10000,
+  withCredentials: true,  // 自动发送HttpOnly Cookie
   headers: {
     'Content-Type': 'application/json',
   }
 });
 
-// 请求拦截器
+// 请求拦截器（不再需要手动添加token，由cookie自动携带）
 api.interceptors.request.use(
   (config) => {
-    // 添加认证token
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
     return config;
   },
   (error) => {
@@ -35,15 +32,13 @@ api.interceptors.response.use(
   (error) => {
     // 统一错误处理
     console.error('API请求错误:', error);
-    
-    // 401未授权，清除token并跳转登录
+
+    // 401未授权，清除用户信息并跳转登录
     if (error.response?.status === 401) {
-      localStorage.removeItem('access_token');
       localStorage.removeItem('currentUser');
-      // 可以在这里触发重新登录
       window.location.reload();
     }
-    
+
     return Promise.reject(error);
   }
 );

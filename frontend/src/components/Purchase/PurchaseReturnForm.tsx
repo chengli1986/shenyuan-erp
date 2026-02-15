@@ -11,13 +11,14 @@ import {
 } from 'antd';
 import { UndoOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import api from '../../services/api';
+import { PurchaseDetailData } from '../../types/purchase';
 
 const { TextArea } = Input;
 const { Text } = Typography;
 
 interface PurchaseReturnFormProps {
   visible: boolean;
-  purchaseData: any;
+  purchaseData: PurchaseDetailData | null;
   onClose: () => void;
   onSuccess: () => void;
 }

@@ -3,7 +3,7 @@ API依赖模块
 """
 
 from typing import Generator, Optional
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
@@ -11,8 +11,11 @@ from app.core.security import verify_token, SecurityException
 from app.models.user import User, UserRole
 
 
-# JWT Token认证
-security = HTTPBearer()
+# JWT Token认证（Authorization header方式，设为可选）
+security = HTTPBearer(auto_error=False)
+
+# Cookie名称（与auth.py保持一致）
+COOKIE_NAME = "access_token"
 
 
 def get_db() -> Generator:
@@ -25,22 +28,36 @@ def get_db() -> Generator:
 
 
 def get_current_user(
+    request: Request,
     db: Session = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> User:
-    """获取当前用户"""
-    token = credentials.credentials
+    """获取当前用户 - 优先从HttpOnly Cookie读取token，兼容Authorization header"""
+    token = None
+
+    # 优先从HttpOnly Cookie获取token
+    cookie_token = request.cookies.get(COOKIE_NAME)
+    if cookie_token:
+        token = cookie_token
+
+    # 兼容：如果cookie中没有，从Authorization header获取
+    if not token and credentials:
+        token = credentials.credentials
+
+    if not token:
+        raise SecurityException("未提供访问令牌")
+
     user_id = verify_token(token)
     if user_id is None:
         raise SecurityException("无效的访问令牌")
-    
+
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise SecurityException("用户不存在")
-    
+
     if not user.is_active:
         raise SecurityException("用户已被禁用")
-    
+
     return user
 
 
@@ -90,18 +107,3 @@ def require_role(*roles: UserRole):
             )
         return current_user
     return role_checker
-
-
-# 临时测试用的模拟用户（用于开发阶段）
-def get_mock_user(role: UserRole = UserRole.ADMIN) -> User:
-    """获取模拟用户 - 仅用于测试"""
-    user = User(
-        id=1,
-        username="admin",
-        email="admin@example.com",
-        name="系统管理员",
-        role=role,
-        is_active=True,
-        is_superuser=True
-    )
-    return user

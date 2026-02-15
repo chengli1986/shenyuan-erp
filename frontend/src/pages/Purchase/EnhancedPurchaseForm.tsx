@@ -157,7 +157,7 @@ const EnhancedPurchaseForm: React.FC = () => {
   };
 
   // 更新申购明细
-  const updateItem = (id: string, field: string, value: any) => {
+  const updateItem = (id: string, field: string, value: string | number | boolean | undefined | null) => {
     setItems(items.map(item => 
       item.id === id ? { ...item, [field]: value } : item
     ));
@@ -370,15 +370,10 @@ const EnhancedPurchaseForm: React.FC = () => {
     }
 
     // 验证剩余可申购数量
-    console.log('[调试] 开始验证剩余可申购数量...');
     const problematicItems = items.filter(item => {
       if (item.item_type === ItemType.MAIN_MATERIAL) {
-        console.log(`[调试] 检查主材: ${item.item_name}, 申购数量: ${item.quantity}, 剩余数量: ${item.remaining_quantity}`);
-        
-        // 检查剩余数量是否为0或负数，或申购数量超过剩余数量
-        if (item.remaining_quantity !== undefined && 
+        if (item.remaining_quantity !== undefined &&
             (item.remaining_quantity <= 0 || item.quantity > item.remaining_quantity)) {
-          console.log(`[调试] 发现问题物料: ${item.item_name}`);
           return true;
         }
       }
@@ -386,7 +381,6 @@ const EnhancedPurchaseForm: React.FC = () => {
     });
 
     if (problematicItems.length > 0) {
-      console.log('[调试] 显示验证失败弹窗');
       const itemList = problematicItems.map((item, index) => 
         `${index + 1}. ${item.item_name} - 申购: ${item.quantity}, 剩余: ${item.remaining_quantity || 0}`
       ).join('\n');
@@ -454,9 +448,9 @@ const EnhancedPurchaseForm: React.FC = () => {
       
       // 返回列表页，添加时间戳强制刷新
       navigate(`/purchases?refresh=${Date.now()}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('创建申购单失败:', error);
-      message.error(error.message || '创建申购单失败');
+      message.error(error instanceof Error ? error.message : '创建申购单失败');
     } finally {
       setLoading(false);
     }
@@ -467,13 +461,13 @@ const EnhancedPurchaseForm: React.FC = () => {
     {
       title: '序号',
       width: 60,
-      render: (_: any, __: any, index: number) => index + 1
+      render: (_: unknown, __: unknown, index: number) => index + 1
     },
     {
       title: '类型',
       dataIndex: 'item_type',
       width: 100,
-      render: (_: any, record: EnhancedPurchaseItem) => (
+      render: (_: unknown, record: EnhancedPurchaseItem) => (
         <Select
           value={record.item_type}
           style={{ width: '100%' }}
@@ -495,7 +489,7 @@ const EnhancedPurchaseForm: React.FC = () => {
       ),
       dataIndex: 'item_name',
       width: 200,
-      render: (_: any, record: EnhancedPurchaseItem) => {
+      render: (_: unknown, record: EnhancedPurchaseItem) => {
         if (record.item_type === ItemType.MAIN_MATERIAL) {
           // 主材：从合同清单下拉选择
           return (
@@ -539,7 +533,7 @@ const EnhancedPurchaseForm: React.FC = () => {
       ),
       dataIndex: 'specification',
       width: 200,
-      render: (_: any, record: EnhancedPurchaseItem) => {
+      render: (_: unknown, record: EnhancedPurchaseItem) => {
         if (record.item_type === ItemType.MAIN_MATERIAL && record.availableSpecifications) {
           // 主材且有可选规格：下拉选择
           return (
@@ -579,7 +573,7 @@ const EnhancedPurchaseForm: React.FC = () => {
       title: '品牌型号',
       dataIndex: 'brand_model',
       width: 150,
-      render: (_: any, record: EnhancedPurchaseItem) => (
+      render: (_: unknown, record: EnhancedPurchaseItem) => (
         <Input
           value={record.brand_model}
           placeholder="品牌型号"
@@ -599,7 +593,7 @@ const EnhancedPurchaseForm: React.FC = () => {
       ),
       dataIndex: 'system_category_id',
       width: 150,
-      render: (_: any, record: EnhancedPurchaseItem) => {
+      render: (_: unknown, record: EnhancedPurchaseItem) => {
         // 显示系统分类选择器
         if (record.autoSelectedSystem) {
           // 自动选择的系统（主材）
@@ -662,7 +656,7 @@ const EnhancedPurchaseForm: React.FC = () => {
       title: '单位',
       dataIndex: 'unit',
       width: 80,
-      render: (_: any, record: EnhancedPurchaseItem) => (
+      render: (_: unknown, record: EnhancedPurchaseItem) => (
         <Input
           value={record.unit}
           placeholder="单位"
@@ -682,7 +676,7 @@ const EnhancedPurchaseForm: React.FC = () => {
       ),
       dataIndex: 'quantity',
       width: 120,
-      render: (_: any, record: EnhancedPurchaseItem) => (
+      render: (_: unknown, record: EnhancedPurchaseItem) => (
         <div>
           <InputNumber
             value={record.quantity}
@@ -704,7 +698,7 @@ const EnhancedPurchaseForm: React.FC = () => {
       title: '备注',
       dataIndex: 'remarks',
       width: 150,
-      render: (_: any, record: EnhancedPurchaseItem) => (
+      render: (_: unknown, record: EnhancedPurchaseItem) => (
         <Input
           value={record.remarks}
           placeholder="备注"
@@ -715,7 +709,7 @@ const EnhancedPurchaseForm: React.FC = () => {
     {
       title: '操作',
       width: 60,
-      render: (_: any, record: EnhancedPurchaseItem) => (
+      render: (_: unknown, record: EnhancedPurchaseItem) => (
         <Button
           type="text"
           danger
