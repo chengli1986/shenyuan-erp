@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     postgres_password: str = ""
     postgres_db: str = "erp_dev"
 
+    @property
+    def effective_database_url(self) -> str:
+        if self.database_driver == "postgresql":
+            return f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        return self.database_url
+
     model_config = ConfigDict(extra="ignore", env_file=".env")
 
 settings = Settings()

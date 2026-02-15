@@ -9,7 +9,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from app.core.config import settings
 
 # 从统一配置中读取数据库URL
-DATABASE_URL = settings.database_url
+DATABASE_URL = settings.effective_database_url
 
 # 创建数据库引擎
 connect_args = {}
