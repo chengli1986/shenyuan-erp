@@ -23,7 +23,7 @@ export class ProjectService {
     search?: string,
     status?: string
   ): Promise<ProjectListResponse> {
-    const params: any = { page, size };
+    const params: Record<string, string | number> = { page, size };
     if (search) params.search = search;
     if (status) params.status = status;
     

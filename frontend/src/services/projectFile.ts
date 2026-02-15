@@ -28,7 +28,7 @@ export class ProjectFileService {
     projectId: number,
     fileType?: FileType
   ): Promise<ProjectFileListResponse> {
-    const params: any = {};
+    const params: Record<string, string | number> = {};
     if (fileType) params.file_type = fileType;
     
     const response = await api.get<ProjectFileListResponse>(
@@ -89,12 +89,12 @@ export class ProjectFileService {
     onProgress?: (percent: number) => void,
     maxRetries: number = 3
   ): Promise<FileUploadResult> {
-    let lastError: any;
+    let lastError: unknown;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         return await this.uploadFile(projectId, file, fileType, description, uploadedBy, onProgress);
-      } catch (error: any) {
+      } catch (error: unknown) {
         lastError = error;
         if (attempt < maxRetries) {
           console.warn(`上传失败，正在重试... (${attempt}/${maxRetries})`);
@@ -131,10 +131,10 @@ export class ProjectFileService {
         );
         results.push(result);
         onFileComplete?.(i, result);
-      } catch (error: any) {
+      } catch (error: unknown) {
         const errorResult: FileUploadResult = {
           success: false,
-          message: `文件 ${file.name} 上传失败: ${error.response?.data?.detail || error.message}`
+          message: `文件 ${file.name} 上传失败: ${error instanceof Error ? error.message : '未知错误'}`
         };
         results.push(errorResult);
         onFileComplete?.(i, errorResult);
@@ -217,9 +217,9 @@ export class ProjectFileService {
       try {
         await this.deleteFile(projectId, fileId);
         success++;
-      } catch (error: any) {
+      } catch (error: unknown) {
         failed++;
-        errors.push(error.response?.data?.detail || error.message);
+        errors.push(error instanceof Error ? error.message : '未知错误');
       }
     }
 

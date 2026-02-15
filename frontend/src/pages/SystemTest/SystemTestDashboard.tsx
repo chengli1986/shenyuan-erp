@@ -105,18 +105,16 @@ const SystemTestDashboard: React.FC = () => {
 
   // 触发测试 - 简化版本，直接触发不需要确认
   const triggerTest = useCallback(async (testType: 'all' | 'unit' | 'integration') => {
-    console.log('触发测试:', testType);
     setRefreshing(true);
     try {
       const result = await testService.triggerTestRun(testType);
-      console.log('测试触发结果:', result);
       message.success(result.message || '测试已触发');
       // 刷新列表
       await loadTestRuns();
       await loadLatestStatus();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('触发测试失败:', error);
-      message.error(error.response?.data?.detail || error.message || '触发测试失败');
+      message.error(error instanceof Error ? error.message : '触发测试失败');
     } finally {
       setRefreshing(false);
     }

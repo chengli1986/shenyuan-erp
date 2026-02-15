@@ -73,7 +73,7 @@ const ContractFileUpload: React.FC<ContractFileUploadProps> = ({
   };
 
   // 提交上传
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: Record<string, unknown>) => {
     if (!selectedFile) {
       message.error('请先选择要上传的Excel文件');
       return;
@@ -96,9 +96,9 @@ const ContractFileUpload: React.FC<ContractFileUploadProps> = ({
 
       const formData = {
         file: selectedFile,
-        upload_user_name: values.upload_user_name,
-        upload_reason: values.upload_reason,
-        change_description: values.change_description
+        upload_user_name: values.upload_user_name as string,
+        upload_reason: values.upload_reason as string | undefined,
+        change_description: values.change_description as string | undefined
       };
 
       const response = await uploadContractExcel(projectId, formData);

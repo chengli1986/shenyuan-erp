@@ -60,13 +60,7 @@ const ContractManagement: React.FC<ContractManagementProps> = ({ projectId: prop
     if (!projectId) return;
     try {
       setLoading(true);
-      console.log(`开始加载项目 ${projectId} 的合同清单汇总...`);
       const summaryData = await getContractSummary(projectId);
-      console.log('=== 合同清单汇总数据 ===');
-      console.log('summaryData:', summaryData);
-      console.log('current_version:', summaryData?.current_version);
-      console.log('current_version.id:', summaryData?.current_version?.id);
-      console.log('total_items:', summaryData?.total_items);
       setSummary(summaryData);
     } catch (error) {
       console.error('加载合同清单汇总失败:', error);

@@ -31,7 +31,7 @@ interface SimplePurchaseRequest {
   system_category?: string;
   total_amount?: number;
   remarks?: string;
-  items?: any[];
+  items?: Record<string, unknown>[];
 }
 
 const SimplePurchaseList: React.FC = () => {
@@ -66,7 +66,6 @@ const SimplePurchaseList: React.FC = () => {
       if (showMessage) {
         message.success(`加载成功，共${result.total || 0}条申购单，当前第${page}页`);
       }
-      console.log('申购单数据已更新:', result.total || 0, '条记录，当前页:', result.items?.length || 0, '条');
     } catch (error) {
       console.error('加载申购单失败:', error);
       message.error('网络连接失败');
@@ -108,7 +107,6 @@ const SimplePurchaseList: React.FC = () => {
     try {
       const response = await api.get(`purchases/${record.id}`);
       const detail = response.data;
-      console.log('✅ 申购单详情加载成功:', detail);
       setCurrentDetail(detail);
       setDetailVisible(true);
     } catch (error) {
@@ -182,13 +180,9 @@ const SimplePurchaseList: React.FC = () => {
       await loadPurchaseRequests(currentPage, pageSize);
       setSelectedRowKeys([]);
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('批量删除错误:', error);
-      if (error.response?.data?.detail) {
-        message.error(`批量删除失败: ${error.response.data.detail}`);
-      } else {
-        message.error('批量删除失败');
-      }
+      message.error(error instanceof Error ? error.message : '批量删除失败');
     } finally {
       setDeleteLoading(false);
     }
@@ -202,20 +196,16 @@ const SimplePurchaseList: React.FC = () => {
       const detail = response.data;
       setCurrentEdit(detail);
       setEditVisible(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('获取申购单详情失败:', error);
-      if (error.response?.data?.detail) {
-        message.error(`获取详情失败: ${error.response.data.detail}`);
-      } else {
-        message.error('获取申购单详情失败');
-      }
+      message.error(error instanceof Error ? error.message : '获取申购单详情失败');
     } finally {
       setEditLoading(false);
     }
   };
 
   // 保存编辑
-  const handleEditSave = async (editData: any) => {
+  const handleEditSave = async (editData: Record<string, unknown>) => {
     if (!currentEdit) return;
     
     try {
@@ -223,7 +213,7 @@ const SimplePurchaseList: React.FC = () => {
       await loadPurchaseRequests(currentPage, pageSize);
       setEditVisible(false);
       setCurrentEdit(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('更新申购单失败:', error);
       throw error; // 让编辑组件处理错误显示
     }

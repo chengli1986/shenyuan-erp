@@ -63,15 +63,16 @@ const ProjectForm: React.FC<ProjectFormProps> = ({
   };
 
   // 处理表单提交
-  const handleFinish = (values: any) => {
+  const handleFinish = (values: Record<string, unknown>) => {
     // 处理日期范围
     if (values.dateRange) {
-      values.start_date = values.dateRange[0]?.toISOString();
-      values.end_date = values.dateRange[1]?.toISOString();
+      const dateRange = values.dateRange as Array<{ toISOString: () => string }>;
+      values.start_date = dateRange[0]?.toISOString();
+      values.end_date = dateRange[1]?.toISOString();
       delete values.dateRange;
     }
 
-    onFinish(values);
+    onFinish(values as unknown as ProjectCreate);
   };
 
   return (

@@ -28,8 +28,6 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
   const handleFinish = async (values: ProjectCreate) => {
     setLoading(true);
     try {
-      console.log('提交的项目数据:', values);
-      
       // 调用API创建项目
       const newProject = await ProjectService.createProject(values);
       
@@ -45,30 +43,9 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
       // 关闭弹窗
       onCancel();
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('创建项目失败:', error);
-      
-      // 处理不同类型的错误
-      if (error.response) {
-        const { status, data } = error.response;
-        
-        if (status === 400) {
-          // 验证错误
-          if (data.detail?.includes('已存在')) {
-            message.error('项目编号已存在，请使用其他编号');
-          } else {
-            message.error(`数据验证失败: ${data.detail || '请检查输入的数据'}`);
-          }
-        } else if (status === 500) {
-          message.error('服务器内部错误，请稍后重试');
-        } else {
-          message.error(`创建失败: ${data.detail || '未知错误'}`);
-        }
-      } else if (error.code === 'ECONNABORTED') {
-        message.error('请求超时，请检查网络连接');
-      } else {
-        message.error('网络错误，无法连接到服务器');
-      }
+      message.error(error instanceof Error ? error.message : '创建项目失败');
     } finally {
       setLoading(false);
     }

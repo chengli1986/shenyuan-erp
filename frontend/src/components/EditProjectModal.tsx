@@ -69,8 +69,6 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
     
     setLoading(true);
     try {
-      console.log('更新的项目数据:', values);
-      
       // 调用API更新项目
       const updatedProject = await ProjectService.updateProject(projectId, values);
       
@@ -83,33 +81,9 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
       // 关闭弹窗
       onCancel();
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('更新项目失败:', error);
-      
-      // 处理不同类型的错误
-      if (error.response) {
-        const { status, data } = error.response;
-        
-        if (status === 400) {
-          // 验证错误
-          if (data.detail?.includes('已存在')) {
-            message.error('项目编号已存在，请使用其他编号');
-          } else {
-            message.error(`数据验证失败: ${data.detail || '请检查输入的数据'}`);
-          }
-        } else if (status === 404) {
-          message.error('项目不存在，可能已被删除');
-          onCancel();
-        } else if (status === 500) {
-          message.error('服务器内部错误，请稍后重试');
-        } else {
-          message.error(`更新失败: ${data.detail || '未知错误'}`);
-        }
-      } else if (error.code === 'ECONNABORTED') {
-        message.error('请求超时，请检查网络连接');
-      } else {
-        message.error('网络错误，无法连接到服务器');
-      }
+      message.error(error instanceof Error ? error.message : '更新项目失败');
     } finally {
       setLoading(false);
     }

@@ -25,6 +25,7 @@ import EnhancedPurchaseForm from './pages/Purchase/EnhancedPurchaseForm';
 import SystemTestDashboard from './pages/SystemTest/SystemTestDashboard';
 import ConnectionStatus from './components/ConnectionStatus';
 import { ConnectionProvider } from './contexts/ConnectionContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const { Header, Sider, Content } = Layout;
 const { useToken } = theme;
@@ -126,8 +127,7 @@ function AppContent() {
                   // 已开发的功能，进行路由跳转
                   navigate(key);
                 } else {
-                  // 暂时显示提示信息
-                  console.log(`${key} 功能开发中...`);
+                  // 暂时不做跳转，功能开发中
                 }
               }}
             />
@@ -224,13 +224,15 @@ function AppContent() {
 // 主App组件
 function App() {
   return (
-    <ConfigProvider locale={zhCN}>
-      <ConnectionProvider>
-        <Router>
-          <AppContent />
-        </Router>
-      </ConnectionProvider>
-    </ConfigProvider>
+    <ErrorBoundary>
+      <ConfigProvider locale={zhCN}>
+        <ConnectionProvider>
+          <Router>
+            <AppContent />
+          </Router>
+        </ConnectionProvider>
+      </ConfigProvider>
+    </ErrorBoundary>
   );
 }
 

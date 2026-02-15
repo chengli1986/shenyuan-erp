@@ -33,7 +33,7 @@ export async function getContractItemsByProject(
   itemType?: string,
   search?: string
 ): Promise<{
-  items: any[];
+  items: Record<string, unknown>[];
   project_id: number;
   version_id: number;
   total: number;
@@ -52,7 +52,7 @@ export async function getContractItemsByProject(
 export async function getContractItemDetails(
   itemId: number
 ): Promise<{
-  item: any;
+  item: Record<string, unknown>;
   purchased_quantity: number;
   remaining_quantity: number;
   can_purchase: boolean;

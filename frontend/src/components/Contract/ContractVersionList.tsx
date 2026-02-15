@@ -93,7 +93,6 @@ const ContractVersionList: React.FC<ContractVersionListProps> = ({
   const [selectedVersion, setSelectedVersion] = useState<ContractFileVersion | null>(null);
 
   const handleViewDetails = (version: ContractFileVersion) => {
-    console.log('查看版本详情:', version);
     setSelectedVersion(version);
     setDetailsVisible(true);
   };
@@ -101,12 +100,8 @@ const ContractVersionList: React.FC<ContractVersionListProps> = ({
   // 下载文件
   const handleDownload = async (version: ContractFileVersion) => {
     try {
-      console.log('开始下载文件:', version);
-      
       // 构建下载URL - 使用相对路径避免跨域问题
       const downloadUrl = `/api/v1/contracts/projects/${projectId}/contract-versions/${version.id}/download`;
-      
-      console.log('下载URL:', downloadUrl);
       
       // 使用fetch下载文件
       const response = await fetch(downloadUrl);

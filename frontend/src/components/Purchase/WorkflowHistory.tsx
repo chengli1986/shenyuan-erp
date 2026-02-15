@@ -38,7 +38,7 @@ interface WorkflowLogItem {
   operator_name: string;
   operator_role: string;
   operation_notes?: string;
-  operation_data?: any;
+  operation_data?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -85,7 +85,7 @@ const WorkflowHistory: React.FC<WorkflowHistoryProps> = ({
     try {
       const response = await api.get(`purchases/${purchaseId}/workflow-logs`);
       setWorkflowLogs(response.data.logs || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载工作流历史失败:', error);
       setWorkflowLogs([]);
     } finally {
@@ -136,22 +136,22 @@ const WorkflowHistory: React.FC<WorkflowHistoryProps> = ({
                 <Text strong>详细信息：</Text>
                 <div style={{ paddingLeft: '8px', marginTop: '4px' }}>
                   {/* 询价信息 */}
-                  {log.operation_data.quote_price && (
-                    <div>报价: <Text code>¥{log.operation_data.quote_price}</Text></div>
-                  )}
-                  {log.operation_data.payment_method && (
-                    <div>付款方式: <Tag>{log.operation_data.payment_method}</Tag></div>
-                  )}
-                  {log.operation_data.estimated_delivery && (
-                    <div>预计交期: {dayjs(log.operation_data.estimated_delivery).format('YYYY-MM-DD')}</div>
-                  )}
-                  
+                  {log.operation_data.quote_price ? (
+                    <div>报价: <Text code>¥{String(log.operation_data.quote_price)}</Text></div>
+                  ) : null}
+                  {log.operation_data.payment_method ? (
+                    <div>付款方式: <Tag>{String(log.operation_data.payment_method)}</Tag></div>
+                  ) : null}
+                  {log.operation_data.estimated_delivery ? (
+                    <div>预计交期: {dayjs(log.operation_data.estimated_delivery as string).format('YYYY-MM-DD')}</div>
+                  ) : null}
+
                   {/* 审批信息 */}
-                  {log.operation_data.approval_notes && (
+                  {log.operation_data.approval_notes ? (
                     <div style={{ marginTop: '4px' }}>
-                      <Text type="secondary">审批意见: {log.operation_data.approval_notes}</Text>
+                      <Text type="secondary">审批意见: {String(log.operation_data.approval_notes)}</Text>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
             )}

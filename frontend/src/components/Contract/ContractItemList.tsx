@@ -94,15 +94,7 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
 
   // 加载设备清单
   const loadItems = useCallback(async (page = 1, size = 20) => {
-    console.log('=== loadItems调用 ===');
-    console.log('currentVersion:', currentVersion);
-    console.log('projectId:', projectId);
-    console.log('page:', page, 'size:', size);
-    console.log('currentVersion是否存在:', !!currentVersion);
-    console.log('currentVersion.id:', currentVersion?.id);
-    
     if (!currentVersion) {
-      console.log('❌ currentVersion为空，无法加载设备清单');
       setItems([]);
       setPagination(prev => ({ ...prev, total: 0 }));
       return;
@@ -110,14 +102,12 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
 
     try {
       setLoading(true);
-      console.log(`开始加载项目${projectId}版本${currentVersion.id}的设备清单...`);
       const response = await getContractItems(projectId, currentVersion.id, {
         ...filters,
         page,
         size
       });
-      
-      console.log('设备清单响应:', response);
+
       setItems(response.items);
       setPagination({
         current: response.page,
@@ -153,9 +143,6 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
 
   // 处理分页变化
   const handlePaginationChange = (page: number, size?: number) => {
-    console.log('=== 分页变化 ===');
-    console.log('新页码:', page);
-    console.log('每页数量:', size || pagination.pageSize);
     setPagination(prev => ({ ...prev, current: page, pageSize: size || prev.pageSize }));
     loadItems(page, size || pagination.pageSize);
   };
@@ -335,13 +322,7 @@ const ContractItemList: React.FC<ContractItemListProps> = ({
     loadItems();
   }, [loadItems]);
 
-  console.log('=== ContractItemList render ===');
-  console.log('currentVersion in render:', currentVersion);
-  console.log('items length:', items.length);
-  console.log('pagination total:', pagination.total);
-  
   if (!currentVersion) {
-    console.log('❌ 渲染：currentVersion为空，显示警告');
     return (
       <Alert
         message="暂无合同清单版本"

@@ -54,9 +54,9 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
       onSuccess();
       onClose();
       form.resetFields();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('退回失败:', error);
-      message.error(error.response?.data?.detail || '退回失败');
+      message.error(error instanceof Error ? error.message : '退回失败');
     } finally {
       setLoading(false);
     }

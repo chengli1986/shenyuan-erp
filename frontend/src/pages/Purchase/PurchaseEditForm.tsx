@@ -91,7 +91,7 @@ interface PurchaseEditFormProps {
   visible: boolean;
   purchaseData: PurchaseRequest | null;
   onCancel: () => void;
-  onSave: (data: any) => Promise<void>;
+  onSave: (data: Record<string, unknown>) => Promise<void>;
 }
 
 const PurchaseEditForm: React.FC<PurchaseEditFormProps> = ({

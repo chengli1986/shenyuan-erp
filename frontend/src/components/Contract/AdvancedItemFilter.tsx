@@ -74,7 +74,7 @@ const AdvancedItemFilter: React.FC<AdvancedItemFilterProps> = ({
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
 
   // 更新筛选条件
-  const updateFilter = (key: keyof FilterValues, value: any) => {
+  const updateFilter = (key: keyof FilterValues, value: string | number | boolean | [number, number] | undefined) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
     onFilterChange(newFilters);

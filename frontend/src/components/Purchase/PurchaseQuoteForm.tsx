@@ -80,9 +80,7 @@ const PurchaseQuoteForm: React.FC<PurchaseQuoteFormProps> = ({
   const handleSubmit = async () => {
     try {
       setLoading(true);
-      console.log('📝 [React] 开始表单验证...');
       const values = await form.validateFields();
-      console.log('✅ [React] 表单验证通过，获取到的values:', values);
       
       // 构建询价数据
       const quoteData: QuoteFormData = {
@@ -130,29 +128,9 @@ const PurchaseQuoteForm: React.FC<PurchaseQuoteFormProps> = ({
       message.success('询价完成，已提交部门主管审批');
       onSuccess();
       onClose();
-    } catch (error: any) {
-      console.error('💥 [React] 询价失败:', error);
-      console.error('🔍 [React] 错误详情:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-        stack: error.stack,
-        config: error.config
-      });
-      
-      // 分析错误类型
-      if (error.response) {
-        console.error(`🌐 [React] HTTP错误 ${error.response.status}: ${error.response.statusText}`);
-        console.error('📋 [React] 服务器响应:', error.response.data);
-      } else if (error.request) {
-        console.error('🚫 [React] 网络错误: 请求已发送但没有收到响应');
-        console.error('📡 [React] 请求详情:', error.request);
-      } else {
-        console.error('⚙️ [React] 配置错误:', error.message);
-      }
-      
-      message.error(error.response?.data?.detail || error.message || '询价提交失败');
+    } catch (error: unknown) {
+      console.error('询价失败:', error);
+      message.error(error instanceof Error ? error.message : '询价提交失败');
     } finally {
       setLoading(false);
     }

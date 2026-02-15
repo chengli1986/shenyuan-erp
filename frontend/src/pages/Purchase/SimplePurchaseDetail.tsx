@@ -71,8 +71,6 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
     return null;
   }
   
-  console.log('SimplePurchaseDetail props:', { visible, purchaseData });
-
   // 获取步骤显示标签
   const getStepLabel = (step?: string) => {
     const stepLabels = {
@@ -127,9 +125,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
   // 处理审批Modal的提交
   const handleApprovalSubmit = async () => {
     try {
-      console.log('📋 [审批Modal] 开始处理审批提交, type:', approvalType);
       const values = await approvalForm.validateFields();
-      console.log('📋 [审批Modal] 表单验证通过, values:', values);
       
       if (approvalType === 'approve') {
         await handleDeptApprove(true, values.approval_notes || '');
@@ -150,7 +146,6 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
 
   // 开启审批Modal
   const openApprovalModal = (type: 'approve' | 'reject' | 'final_approve' | 'final_reject') => {
-    console.log('📋 [审批Modal] 打开审批Modal, type:', type);
     setApprovalType(type);
     setApprovalVisible(true);
     approvalForm.resetFields();
@@ -158,7 +153,6 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
 
   // 部门主管审批
   const handleDeptApprove = async (approved: boolean, notes: string) => {
-    console.log('🏢 [部门审批] 开始处理审批:', { approved, notes, purchaseId: purchaseData.id });
     setLoading(true);
     try {
       const approvalData = {
@@ -180,7 +174,6 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
 
   // 总经理最终审批
   const handleFinalApprove = async (approved: boolean, notes: string) => {
-    console.log('👑 [总经理审批] 开始处理最终审批:', { approved, notes, purchaseId: purchaseData.id });
     setLoading(true);
     try {
       const approvalData = {

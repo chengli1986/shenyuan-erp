@@ -152,9 +152,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({
     try {
       const config = await ProjectFileService.getFileSystemConfig();
       setFileConfig(config);
-      console.log('获取到文件配置:', config);
     } catch (error) {
-      console.warn('获取文件配置失败，使用默认配置:', error);
       // 使用默认配置
       setFileConfig({
         file_types: defaultFileTypes,
@@ -174,14 +172,16 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({
   }, [visible, fetchFiles, fetchFileConfig]);
 
   // 处理文件上传
-  const handleUpload = async (values: any) => {
+  const handleUpload = async (values: Record<string, unknown>) => {
     if (!selectedFile) {
       message.error('请选择要上传的文件');
       return;
     }
 
     // 验证文件
-    const validation = validateFile(selectedFile, values.file_type);
+    const fileType = values.file_type as FileType;
+    const description = values.description as string | undefined;
+    const validation = validateFile(selectedFile, fileType);
     if (!validation.valid) {
       message.error(validation.message);
       return;
@@ -194,8 +194,8 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({
       await ProjectFileService.uploadFileWithRetry(
         projectId,
         selectedFile,
-        values.file_type,
-        values.description,
+        fileType,
+        description,
         '当前用户', // 后续从用户状态获取
         (percent) => setUploadProgress(percent)
       );
@@ -206,8 +206,8 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({
       setSelectedFile(null);
       setUploadProgress(0);
       fetchFiles(); // 刷新列表
-    } catch (error: any) {
-      message.error(error.response?.data?.detail || '文件上传失败');
+    } catch (error: unknown) {
+      message.error(error instanceof Error ? error.message : '文件上传失败');
     } finally {
       setUploadLoading(false);
     }
