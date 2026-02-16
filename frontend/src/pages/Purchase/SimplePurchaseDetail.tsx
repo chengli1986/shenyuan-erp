@@ -3,42 +3,22 @@ import {
   Modal,
   Descriptions,
   Table,
-  Tag,
   Space,
   Button,
-  Form,
-  Input,
-  message,
-  Tooltip
 } from 'antd';
-import { 
-  CheckCircleOutlined, 
-  CloseCircleOutlined, 
-  SendOutlined,
-  DollarOutlined,
-  CrownOutlined,
+import {
   EditOutlined,
   HistoryOutlined,
   UpOutlined,
   DownOutlined
 } from '@ant-design/icons';
-import { formatItemType } from '../../services/purchase';
 import WorkflowStatus, { PurchaseStatus, WorkflowStep } from '../../components/Purchase/WorkflowStatus';
 import WorkflowHistory from '../../components/Purchase/WorkflowHistory';
 import PurchaseQuoteForm from '../../components/Purchase/PurchaseQuoteForm';
 import PurchaseReturnForm from '../../components/Purchase/PurchaseReturnForm';
-import api from '../../services/api';
-import { PurchaseDetailData, PurchaseDetailItem } from '../../types/purchase';
-import axios from 'axios';
-
-// 从unknown错误中提取消息
-const getErrorMessage = (error: unknown, fallback: string = '操作失败'): string => {
-  if (axios.isAxiosError(error)) {
-    return error.response?.data?.detail || error.message || fallback;
-  }
-  if (error instanceof Error) return error.message;
-  return fallback;
-};
+import WorkflowActionsPanel from './WorkflowActionsPanel';
+import { getPurchaseDetailColumns } from './PurchaseDetailColumns';
+import { PurchaseDetailData } from '../../types/purchase';
 
 interface SimplePurchaseDetailProps {
   visible: boolean;
@@ -55,15 +35,10 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
   onRefresh,
   onEdit
 }) => {
-  const [approvalForm] = Form.useForm(); // 审批表单
-  const [loading, setLoading] = useState(false);
   const [historyVisible, setHistoryVisible] = useState(false);
   const [quoteVisible, setQuoteVisible] = useState(false);
   const [returnVisible, setReturnVisible] = useState(false);
-  const [workflowExpanded, setWorkflowExpanded] = useState(false); // 工作流进展展开状态
-  // 新增：审批Modal状态
-  const [approvalVisible, setApprovalVisible] = useState(false);
-  const [approvalType, setApprovalType] = useState<'approve' | 'reject' | 'final_approve' | 'final_reject'>('approve');
+  const [workflowExpanded, setWorkflowExpanded] = useState(false);
   const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
   
   if (!purchaseData) {
@@ -71,7 +46,6 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
     return null;
   }
   
-  // 获取步骤显示标签
   const getStepLabel = (step?: string) => {
     const stepLabels = {
       'project_manager': '项目经理',
@@ -83,431 +57,7 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
     return stepLabels[step as keyof typeof stepLabels] || step || '-';
   };
 
-  // 检查当前用户是否可以操作
-  const canOperate = (requiredStep: string, requiredRole?: string) => {
-    if (!currentUser) return false;
-    
-    // 检查是否是当前步骤
-    if (purchaseData.current_step !== requiredStep) return false;
-    
-    // 检查角色权限 - 根据步骤自动匹配角色
-    const stepRoleMap: { [key: string]: string } = {
-      'project_manager': 'project_manager',
-      'purchaser': 'purchaser',
-      'dept_manager': 'dept_manager',
-      'general_manager': 'general_manager'
-    };
-    
-    const expectedRole = requiredRole || stepRoleMap[requiredStep];
-    if (expectedRole && currentUser.role !== expectedRole) return false;
-    
-    return true;
-  };
-
-  // 提交申购单
-  const handleSubmit = async () => {
-    setLoading(true);
-    try {
-      await api.post(`purchases/${purchaseData.id}/submit`);
-      message.success('申购单提交成功');
-      onRefresh?.();
-      onClose();
-    } catch (error: unknown) {
-      console.error('提交申购单失败:', error);
-      message.error(`提交失败: ${getErrorMessage(error, '网络连接失败')}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 旧的询价函数已移除，使用独立的PurchaseQuoteForm组件
-
-  // 处理审批Modal的提交
-  const handleApprovalSubmit = async () => {
-    try {
-      const values = await approvalForm.validateFields();
-      
-      if (approvalType === 'approve') {
-        await handleDeptApprove(true, values.approval_notes || '');
-      } else if (approvalType === 'reject') {
-        await handleDeptApprove(false, values.rejection_notes || '');
-      } else if (approvalType === 'final_approve') {
-        await handleFinalApprove(true, values.final_approval_notes || '');
-      } else if (approvalType === 'final_reject') {
-        await handleFinalApprove(false, values.final_rejection_notes || '');
-      }
-      
-      setApprovalVisible(false);
-      approvalForm.resetFields();
-    } catch (error) {
-      console.error('📋 [审批Modal] 表单验证失败:', error);
-    }
-  };
-
-  // 开启审批Modal
-  const openApprovalModal = (type: 'approve' | 'reject' | 'final_approve' | 'final_reject') => {
-    setApprovalType(type);
-    setApprovalVisible(true);
-    approvalForm.resetFields();
-  };
-
-  // 部门主管审批
-  const handleDeptApprove = async (approved: boolean, notes: string) => {
-    setLoading(true);
-    try {
-      const approvalData = {
-        approval_status: approved ? 'approved' : 'rejected',
-        approval_notes: notes
-      };
-
-      await api.post(`purchases/${purchaseData.id}/dept-approve`, approvalData);
-      message.success(approved ? '审批通过' : '审批拒绝');
-      onRefresh?.();
-      onClose();
-    } catch (error: unknown) {
-      console.error('🏢 [部门审批] 审批失败:', error);
-      message.error(`审批失败: ${getErrorMessage(error, '网络连接失败')}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 总经理最终审批
-  const handleFinalApprove = async (approved: boolean, notes: string) => {
-    setLoading(true);
-    try {
-      const approvalData = {
-        approval_status: approved ? 'approved' : 'rejected',
-        approval_notes: notes
-      };
-
-      await api.post(`purchases/${purchaseData.id}/final-approve`, approvalData);
-      message.success(approved ? '最终审批通过' : '最终审批拒绝');
-      onRefresh?.();
-      onClose();
-    } catch (error: unknown) {
-      console.error('👑 [总经理审批] 最终审批失败:', error);
-      message.error(`最终审批失败: ${getErrorMessage(error, '网络连接失败')}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 渲染工作流操作区域
-  const renderWorkflowActions = () => {
-    if (!currentUser) return null;
-
-    const status = purchaseData.status;
-    const currentStep = purchaseData.current_step;
-
-    return (
-      <div style={{ marginBottom: 16, padding: 16, backgroundColor: '#f5f5f5', borderRadius: 6 }}>
-        <h4>工作流操作</h4>
-        <Space wrap>
-          {/* 项目经理提交 */}
-          {status === 'draft' && currentStep === 'project_manager' && canOperate('project_manager') && (
-            <Button
-              type="primary"
-              icon={<SendOutlined />}
-              onClick={handleSubmit}
-              loading={loading}
-            >
-              提交申购单
-            </Button>
-          )}
-
-          {/* 采购员询价和退回 */}
-          {status === 'submitted' && currentStep === 'purchaser' && canOperate('purchaser') && (
-            <>
-              <Button
-                type="primary"
-                icon={<DollarOutlined />}
-                onClick={() => setQuoteVisible(true)}
-              >
-                询价
-              </Button>
-              <Button
-                danger
-                icon={<CloseCircleOutlined />}
-                onClick={() => setReturnVisible(true)}
-                style={{ marginLeft: 8 }}
-              >
-                退回
-              </Button>
-            </>
-          )}
-
-          {/* 项目经理退回（在询价完成后，如对价格或供应商不满意可退回给采购员重新询价） */}
-          {status === 'price_quoted' && currentStep === 'dept_manager' && currentUser?.role === 'project_manager' && (
-            <Button
-              danger
-              icon={<CloseCircleOutlined />}
-              onClick={() => setReturnVisible(true)}
-            >
-              退回采购员
-            </Button>
-          )}
-
-          {/* 采购员查看已询价申购单时，显示禁用的批准和拒绝按钮 */}
-          {status === 'price_quoted' && currentStep === 'dept_manager' && currentUser?.role === 'purchaser' && (
-            <>
-              <Tooltip title="此申购单已询价，节点已流转到部门主管处，等待部门主管审批">
-                <Button
-                  type="primary"
-                  icon={<CheckCircleOutlined />}
-                  disabled
-                  style={{ opacity: 0.5, cursor: 'not-allowed' }}
-                >
-                  批准
-                </Button>
-              </Tooltip>
-              <Tooltip title="此申购单已询价，节点已流转到部门主管处，等待部门主管审批">
-                <Button
-                  danger
-                  icon={<CloseCircleOutlined />}
-                  disabled
-                  style={{ opacity: 0.5, cursor: 'not-allowed', marginLeft: 8 }}
-                >
-                  拒绝
-                </Button>
-              </Tooltip>
-            </>
-          )}
-
-          {/* 部门主管审批 */}
-          {status === 'price_quoted' && currentStep === 'dept_manager' && canOperate('dept_manager') && (
-            <>
-              <Button
-                type="primary"
-                icon={<CheckCircleOutlined />}
-                onClick={() => openApprovalModal('approve')}
-                loading={loading}
-              >
-                批准
-              </Button>
-              <Button
-                danger
-                icon={<CloseCircleOutlined />}
-                onClick={() => openApprovalModal('reject')}
-                loading={loading}
-              >
-                拒绝
-              </Button>
-            </>
-          )}
-
-          {/* 采购员查看部门已批准申购单时，显示禁用的最终批准和拒绝按钮 */}
-          {status === 'dept_approved' && currentStep === 'general_manager' && currentUser?.role === 'purchaser' && (
-            <>
-              <Tooltip title="此申购单已通过部门审批，节点已流转到总经理处，等待总经理最终审批">
-                <Button
-                  type="primary"
-                  icon={<CrownOutlined />}
-                  disabled
-                  style={{ opacity: 0.5, cursor: 'not-allowed' }}
-                >
-                  最终批准
-                </Button>
-              </Tooltip>
-              <Tooltip title="此申购单已通过部门审批，节点已流转到总经理处，等待总经理最终审批">
-                <Button
-                  danger
-                  icon={<CloseCircleOutlined />}
-                  disabled
-                  style={{ opacity: 0.5, cursor: 'not-allowed', marginLeft: 8 }}
-                >
-                  最终拒绝
-                </Button>
-              </Tooltip>
-            </>
-          )}
-
-          {/* 总经理最终审批 */}
-          {status === 'dept_approved' && currentStep === 'general_manager' && canOperate('general_manager') && (
-            <>
-              <Button
-                type="primary"
-                icon={<CrownOutlined />}
-                onClick={() => openApprovalModal('final_approve')}
-                loading={loading}
-              >
-                最终批准
-              </Button>
-              <Button
-                danger
-                icon={<CloseCircleOutlined />}
-                onClick={() => openApprovalModal('final_reject')}
-                loading={loading}
-              >
-                最终拒绝
-              </Button>
-            </>
-          )}
-
-          {/* 显示当前用户和权限信息 */}
-          <div style={{ marginLeft: 'auto', fontSize: '12px', color: '#666' }}>
-            当前用户: {currentUser?.name} ({currentUser?.role})
-          </div>
-        </Space>
-      </div>
-    );
-  };
-
-  const columns = [
-    {
-      title: '序号',
-      width: 60,
-      render: (_: unknown, __: unknown, index: number) => index + 1
-    },
-    {
-      title: '类型',
-      dataIndex: 'item_type',
-      width: 80,
-      render: (type: string) => formatItemType(type)
-    },
-    {
-      title: '物料名称',
-      dataIndex: 'item_name',
-      width: 150
-    },
-    {
-      title: '规格型号',
-      dataIndex: 'specification',
-      width: 150,
-      render: (value: string) => value || '-'
-    },
-    {
-      title: '品牌',
-      dataIndex: 'brand',
-      width: 100,
-      render: (value: string) => value || '-'
-    },
-    {
-      title: '所属系统',
-      dataIndex: 'system_category_name',
-      width: 120,
-      render: (value: string) => value ? (
-        <Tag color="blue">{value}</Tag>
-      ) : '-'
-    },
-    {
-      title: '单位',
-      dataIndex: 'unit',
-      width: 60
-    },
-    {
-      title: '申购数量',
-      dataIndex: 'quantity',
-      width: 100,
-      render: (value: string) => parseFloat(value).toFixed(2)
-    },
-    {
-      title: '剩余可申购',
-      dataIndex: 'remaining_quantity',
-      width: 110,
-      render: (value: number | undefined, record: PurchaseDetailItem) => {
-        // 只有主材显示剩余可申购数量
-        if (record.item_type === 'main' && record.contract_item_id) {
-          // 如果有剩余数量信息则显示，否则显示加载中
-          if (value !== undefined && value !== null) {
-            const remaining = typeof value === 'string' ? parseFloat(value) : value;
-            return (
-              <span style={{ color: remaining <= 0 ? '#ff4d4f' : remaining <= 10 ? '#faad14' : '#52c41a' }}>
-                {remaining.toFixed(2)}
-              </span>
-            );
-          }
-          return <span style={{ color: '#999' }}>计算中...</span>;
-        }
-        return '-';  // 辅材不显示剩余数量
-      }
-    },
-    {
-      title: '已收数量',
-      dataIndex: 'received_quantity',
-      width: 100,
-      render: (value: string) => parseFloat(value || '0').toFixed(2)
-    },
-    // 根据用户权限显示询价和价格信息
-    ...(currentUser?.role !== 'project_manager' ? [
-      {
-        title: '供应商',
-        dataIndex: 'supplier_name',
-        width: 120,
-        render: (value: string) => value || '-'
-      },
-      {
-        title: '供应商联系人',
-        dataIndex: 'supplier_contact',
-        width: 120,
-        render: (value: string) => value || '-'
-      },
-      {
-        title: '付款方式',
-        dataIndex: 'payment_method',
-        width: 100,
-        render: (value: string, record: PurchaseDetailItem) => {
-          // 正确的数据读取优先级：
-          // 1. 物料级payment_method字段 
-          // 2. supplier_info.payment_method (实际存储位置)
-          // 3. 申购单级别payment_method
-          let paymentMethod = value || record.supplier_info?.payment_method || purchaseData.payment_method;
-          
-          const paymentMethods: { [key: string]: string } = {
-            'PREPAYMENT': '预付款',
-            'ON_DELIVERY': '货到付款', 
-            'MONTHLY': '月结',
-            'INSTALLMENT': '分期付款'
-          };
-          return (paymentMethod ? paymentMethods[paymentMethod] : undefined) || paymentMethod || '-';
-        }
-      },
-      {
-        title: '预计交货',
-        dataIndex: 'estimated_delivery_date',
-        width: 100,
-        render: (value: string, record: PurchaseDetailItem) => {
-          // 正确的数据读取优先级：
-          // 1. 物料级estimated_delivery_date字段
-          // 2. estimated_delivery字段 (实际存储位置)
-          // 3. 申购单级别estimated_delivery_date
-          const deliveryDate = value || record.estimated_delivery || purchaseData.estimated_delivery_date;
-          if (!deliveryDate) return '-';
-          return new Date(deliveryDate).toLocaleDateString('zh-CN');
-        }
-      },
-      {
-        title: '单价',
-        dataIndex: 'unit_price',
-        width: 100,
-        render: (value: string | number) => {
-          if (!value || parseFloat(value.toString()) === 0) return '-';
-          return `¥${parseFloat(value.toString()).toLocaleString('zh-CN', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          })}`;
-        }
-      },
-      {
-        title: '总价',
-        dataIndex: 'total_price',
-        width: 120,
-        render: (value: string | number) => {
-          if (!value || parseFloat(value.toString()) === 0) return '-';
-          return `¥${parseFloat(value.toString()).toLocaleString('zh-CN', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          })}`;
-        }
-      }
-    ] : []),
-    {
-      title: '备注',
-      dataIndex: 'remarks',
-      width: 150,
-      render: (value: string) => value || '-'
-    }
-  ];
+  const columns = getPurchaseDetailColumns(currentUser, purchaseData);
 
   return (
     <>
@@ -608,7 +158,14 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
       )}
 
       {/* 工作流操作区域 */}
-      {renderWorkflowActions()}
+      <WorkflowActionsPanel
+        purchaseData={purchaseData}
+        currentUser={currentUser}
+        onClose={onClose}
+        onRefresh={onRefresh}
+        onQuoteOpen={() => setQuoteVisible(true)}
+        onReturnOpen={() => setReturnVisible(true)}
+      />
       
       {/* 申购明细 */}
       <Table
@@ -678,60 +235,6 @@ const SimplePurchaseDetail: React.FC<SimplePurchaseDetailProps> = ({
         />
       )}
 
-      {/* 审批Modal */}
-      <Modal
-        title={
-          approvalType === 'approve' ? '部门主管审批' :
-          approvalType === 'reject' ? '部门主管审批' :
-          approvalType === 'final_approve' ? '总经理最终审批' :
-          '总经理最终审批'
-        }
-        visible={approvalVisible}
-        onOk={handleApprovalSubmit}
-        onCancel={() => {
-          setApprovalVisible(false);
-          approvalForm.resetFields();
-        }}
-        okText={
-          approvalType === 'approve' ? '确认批准' :
-          approvalType === 'reject' ? '确认拒绝' :
-          approvalType === 'final_approve' ? '最终批准' :
-          '确认拒绝'
-        }
-        cancelText="取消"
-        confirmLoading={loading}
-      >
-        <Form form={approvalForm} layout="vertical">
-          {approvalType === 'approve' && (
-            <Form.Item name="approval_notes" label="审批意见">
-              <Input.TextArea rows={3} placeholder="请输入审批意见..." />
-            </Form.Item>
-          )}
-          {approvalType === 'reject' && (
-            <Form.Item 
-              name="rejection_notes" 
-              label="拒绝理由"
-              rules={[{ required: true, message: '请输入拒绝理由' }]}
-            >
-              <Input.TextArea rows={3} placeholder="请输入拒绝理由..." />
-            </Form.Item>
-          )}
-          {approvalType === 'final_approve' && (
-            <Form.Item name="final_approval_notes" label="最终审批意见">
-              <Input.TextArea rows={3} placeholder="请输入最终审批意见..." />
-            </Form.Item>
-          )}
-          {approvalType === 'final_reject' && (
-            <Form.Item 
-              name="final_rejection_notes" 
-              label="最终拒绝理由"
-              rules={[{ required: true, message: '请输入最终拒绝理由' }]}
-            >
-              <Input.TextArea rows={3} placeholder="请输入最终拒绝理由..." />
-            </Form.Item>
-          )}
-        </Form>
-      </Modal>
     </>
   );
 };
