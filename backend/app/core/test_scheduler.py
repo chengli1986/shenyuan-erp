@@ -289,7 +289,7 @@ class TestScheduler:
             # 清理临时文件
             try:
                 os.remove(json_path)
-            except:
+            except (OSError, IOError):
                 pass
                 
         except Exception as e:

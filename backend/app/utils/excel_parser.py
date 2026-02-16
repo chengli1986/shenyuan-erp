@@ -577,27 +577,3 @@ def parse_contract_excel(file_path: str) -> Dict[str, Any]:
     finally:
         parser.close()
 
-if __name__ == "__main__":
-    # 测试代码
-    import sys
-    import os
-    
-    # 添加项目根目录到路径
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    
-    # 测试解析
-    test_file = r"C:\Users\ch_w1\shenyuan-erp\docs\体育局投标清单.xlsx"
-    
-    if os.path.exists(test_file):
-        print(f"测试解析文件: {test_file}")
-        try:
-            result = parse_contract_excel(test_file)
-            print(f"解析成功！")
-            print(f"总工作表数: {result['summary']['total_sheets']}")
-            print(f"总设备数: {result['summary']['total_items']}")
-            print(f"总金额: {result['summary']['total_amount']}")
-            print(f"系统分类: {[cat['category_name'] for cat in result['categories']]}")
-        except Exception as e:
-            print(f"测试失败: {str(e)}")
-    else:
-        print(f"测试文件不存在: {test_file}")
