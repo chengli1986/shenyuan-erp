@@ -6,7 +6,7 @@ API v1版本路由汇总
 """
 
 from fastapi import APIRouter
-from . import projects, project_files, contracts, file_upload, test_results, purchases, purchase_query, purchase_workflow, auth
+from . import projects, project_files, contracts, contract_versions, contract_items, file_upload, test_results, purchases, purchase_query, purchase_workflow, auth
 
 # 创建v1版本的主路由
 api_router = APIRouter()
@@ -30,6 +30,20 @@ api_router.include_router(
     contracts.router,
     prefix="/contracts",
     tags=["contracts"]
+)
+
+# 注册合同版本管理API路由
+api_router.include_router(
+    contract_versions.router,
+    prefix="/contracts",
+    tags=["contract-versions"]
+)
+
+# 注册合同清单明细API路由
+api_router.include_router(
+    contract_items.router,
+    prefix="/contracts",
+    tags=["contract-items"]
 )
 
 # 注册文件上传相关的API路由
