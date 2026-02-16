@@ -6,7 +6,7 @@ API v1版本路由汇总
 """
 
 from fastapi import APIRouter
-from . import projects, project_files, contracts, contract_versions, contract_items, file_upload, test_results, purchases, purchase_query, purchase_workflow, auth
+from . import projects, project_files, contracts, contract_versions, contract_items, file_upload, test_results, purchases, purchase_query, purchase_workflow, purchase_suppliers, auth
 
 # 创建v1版本的主路由
 api_router = APIRouter()
@@ -80,6 +80,13 @@ api_router.include_router(
     purchase_workflow.router,
     prefix="/purchases",
     tags=["purchase-workflow"]
+)
+
+# 注册供应商管理相关的API路由
+api_router.include_router(
+    purchase_suppliers.router,
+    prefix="/purchases",
+    tags=["purchase-suppliers"]
 )
 
 # 注册用户认证相关的API路由
