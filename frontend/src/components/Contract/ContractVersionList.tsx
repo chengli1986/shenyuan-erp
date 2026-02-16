@@ -34,6 +34,7 @@ import {
   getContractFiles,
   deleteContractFile
 } from '../../services/contract';
+import api from '../../services/api';
 
 const { Text } = Typography;
 
@@ -100,33 +101,25 @@ const ContractVersionList: React.FC<ContractVersionListProps> = ({
   // 下载文件
   const handleDownload = async (version: ContractFileVersion) => {
     try {
-      // 构建下载URL - 使用相对路径避免跨域问题
-      const downloadUrl = `/api/v1/contracts/projects/${projectId}/contract-versions/${version.id}/download`;
-      
-      // 使用fetch下载文件
-      const response = await fetch(downloadUrl);
-      
-      if (!response.ok) {
-        throw new Error(`下载失败: ${response.status} ${response.statusText}`);
-      }
-      
-      // 获取文件blob
-      const blob = await response.blob();
-      
+      const response = await api.get(
+        `contracts/projects/${projectId}/contract-versions/${version.id}/download`,
+        { responseType: 'blob' }
+      );
+
       // 创建下载链接
-      const url = window.URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
       link.download = version.original_filename;
       link.style.display = 'none';
-      
+
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       // 释放URL对象
       window.URL.revokeObjectURL(url);
-      
+
       message.success('文件下载成功');
     } catch (error) {
       console.error('下载失败:', error);

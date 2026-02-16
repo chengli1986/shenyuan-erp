@@ -12,12 +12,15 @@ import asyncio
 import sys
 import os
 import subprocess
+import logging
 
 from app.core.database import get_db
 from app.models.test_result import TestResult, TestRun
 from app.api.deps import get_current_user
 from app.core.test_scheduler import TestScheduler
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -134,7 +137,7 @@ async def trigger_test_run(
     
     if stuck_tests:
         db.commit()
-        print(f"清理了 {len(stuck_tests)} 个僵死的测试运行")
+        logger.info(f"清理了 {len(stuck_tests)} 个僵死的测试运行")
     
     # 检查是否还有正在运行的测试
     running_tests = db.query(TestRun).filter(TestRun.status == "running").count()
@@ -172,14 +175,14 @@ async def trigger_test_run(
         else:
             test_path = f"tests/{test_type}"
         
-        print(f"Running pytest in {backend_path}/{test_path}")
+        logger.info(f"Running pytest in {backend_path}/{test_path}")
         
         # 使用虚拟环境的Python解释器
         venv_python = os.path.join(backend_path, 'venv', 'bin', 'python')
         if not os.path.exists(venv_python):
             venv_python = sys.executable  # 如果虚拟环境不存在，使用当前解释器
         
-        print(f"Using Python interpreter: {venv_python}")
+        logger.info(f"Using Python interpreter: {venv_python}")
         
         # 使用异步subprocess，排除disabled和manual目录
         process = await asyncio.create_subprocess_exec(

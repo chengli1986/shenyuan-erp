@@ -604,9 +604,9 @@ async def download_contract_file(
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
     file_path = os.path.join(backend_dir, "uploads", "contracts", version.stored_filename)
     
-    print(f"查找文件路径: {file_path}")
-    print(f"文件是否存在: {os.path.exists(file_path)}")
-    print(f"存储文件名: {version.stored_filename}")
+    logger.debug(f"查找文件路径: {file_path}")
+    logger.debug(f"文件是否存在: {os.path.exists(file_path)}")
+    logger.debug(f"存储文件名: {version.stored_filename}")
     
     # 检查文件是否存在
     if not os.path.exists(file_path):
