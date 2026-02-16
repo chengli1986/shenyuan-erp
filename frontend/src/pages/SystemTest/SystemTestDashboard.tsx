@@ -3,35 +3,21 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Card, 
-  Row, 
-  Col, 
-  Statistic, 
-  Button, 
-  Table, 
-  Tag, 
+import {
+  Card,
+  Row,
+  Col,
+  Button,
+  Table,
   message,
   Space,
-  Progress,
-  Alert,
-  Tooltip,
-  Badge,
-  Modal,
-  Collapse,
-  Typography,
   Select
 } from 'antd';
 import {
   PlayCircleOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  ClockCircleOutlined,
   ReloadOutlined,
   ExperimentOutlined,
   BarChartOutlined,
-  BugOutlined,
-  QuestionCircleOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -42,6 +28,7 @@ import { testService } from '../../services/test';
 import { TestRun, LatestTestStatus } from '../../types/test';
 import TestResultDetail from './TestResultDetail';
 import TestStatisticsChart from './TestStatisticsChart';
+import { getTestRunColumns, LatestStatusCard } from './SystemTestDashboardColumns';
 
 dayjs.extend(relativeTime);
 dayjs.extend(utc);
@@ -49,9 +36,6 @@ dayjs.extend(timezone);
 dayjs.locale('zh-cn');
 // 设置默认时区为用户本地时区
 dayjs.tz.setDefault(dayjs.tz.guess());
-
-const { Panel } = Collapse;
-const { Text } = Typography;
 
 const SystemTestDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -120,114 +104,18 @@ const SystemTestDashboard: React.FC = () => {
     }
   }, [loadTestRuns, loadLatestStatus]);
 
-  // 获取状态标签
-  const getStatusTag = (status: string) => {
-    const statusMap: Record<string, { color: string; text: string }> = {
-      running: { color: 'processing', text: '运行中' },
-      completed: { color: 'success', text: '已完成' },
-      failed: { color: 'error', text: '失败' },
-      passed: { color: 'success', text: '通过' },
-      skipped: { color: 'warning', text: '跳过' },
-      error: { color: 'error', text: '错误' }
-    };
-    const config = statusMap[status] || { color: 'default', text: status };
-    return <Tag color={config.color}>{config.text}</Tag>;
-  };
-
-  // 获取运行类型标签
-  const getRunTypeTag = (runType: string) => {
-    return (
-      <Tag color={runType === 'scheduled' ? 'blue' : 'green'}>
-        {runType === 'scheduled' ? '定时执行' : '手动触发'}
-      </Tag>
-    );
-  };
-
   useEffect(() => {
     loadTestRuns();
     loadLatestStatus();
   }, [loadTestRuns, loadLatestStatus]);
 
-  const columns = [
-    {
-      title: '运行ID',
-      dataIndex: 'run_id',
-      key: 'run_id',
-      width: 200,
-      render: (text: string) => (
-        <Button type="link" onClick={() => {
-          setSelectedRun(text);
-          setDetailModalVisible(true);
-        }}>
-          {text}
-        </Button>
-      )
+  // 表格列定义
+  const columns = getTestRunColumns({
+    onViewDetail: (runId) => {
+      setSelectedRun(runId);
+      setDetailModalVisible(true);
     },
-    {
-      title: '运行类型',
-      dataIndex: 'run_type',
-      key: 'run_type',
-      width: 100,
-      render: getRunTypeTag
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      render: getStatusTag
-    },
-    {
-      title: '测试统计',
-      key: 'statistics',
-      width: 300,
-      render: (record: TestRun) => (
-        <Space size="small">
-          <Tooltip title="总数">
-            <Badge count={record.total_tests} showZero style={{ backgroundColor: '#52c41a' }} />
-          </Tooltip>
-          <Tooltip title="通过">
-            <Badge count={record.passed_tests} showZero style={{ backgroundColor: '#52c41a' }} />
-          </Tooltip>
-          <Tooltip title="失败">
-            <Badge count={record.failed_tests} showZero style={{ backgroundColor: record.failed_tests > 0 ? '#f5222d' : '#d9d9d9' }} />
-          </Tooltip>
-          <Tooltip title="跳过">
-            <Badge count={record.skipped_tests} showZero style={{ backgroundColor: record.skipped_tests > 0 ? '#faad14' : '#d9d9d9' }} />
-          </Tooltip>
-          <Progress
-            percent={record.success_rate}
-            size="small"
-            style={{ width: 80 }}
-            status={record.success_rate === 100 ? 'success' : record.success_rate < 80 ? 'exception' : 'normal'}
-          />
-        </Space>
-      )
-    },
-    {
-      title: '持续时间',
-      dataIndex: 'duration',
-      key: 'duration',
-      width: 100,
-      render: (duration?: number) => duration ? `${duration.toFixed(2)}s` : '-'
-    },
-    {
-      title: '触发人',
-      dataIndex: 'trigger_user',
-      key: 'trigger_user',
-      width: 100
-    },
-    {
-      title: '开始时间',
-      dataIndex: 'start_time',
-      key: 'start_time',
-      width: 180,
-      render: (time: string) => {
-        // 将UTC时间转换为本地时间
-        return dayjs.utc(time).local().format('YYYY-MM-DD HH:mm:ss');
-      }
-    }
-  ];
+  });
 
   return (
     <div style={{ padding: 24 }}>
@@ -284,82 +172,7 @@ const SystemTestDashboard: React.FC = () => {
       </Card>
 
       {/* 最新状态卡片 */}
-      {latestStatus?.has_run && latestStatus.latest_run && (
-        <Card bordered={false} style={{ marginBottom: 16 }}>
-          <Row gutter={16}>
-            <Col span={6}>
-              <Statistic
-                title="最新测试状态"
-                value={
-                  latestStatus.latest_run.status === 'completed' ? '已完成' :
-                  latestStatus.latest_run.status === 'failed' ? '失败' :
-                  latestStatus.latest_run.status === 'running' ? '运行中' : '未知'
-                }
-                prefix={
-                  latestStatus.latest_run.status === 'completed' ? 
-                    <CheckCircleOutlined style={{ color: '#52c41a' }} /> :
-                  latestStatus.latest_run.status === 'failed' ?
-                    <CloseCircleOutlined style={{ color: '#ff4d4f' }} /> :
-                  latestStatus.latest_run.status === 'running' ?
-                    <ClockCircleOutlined style={{ color: '#1890ff' }} /> :
-                    <QuestionCircleOutlined style={{ color: '#8c8c8c' }} />
-                }
-              />
-            </Col>
-            <Col span={6}>
-              <Statistic
-                title="成功率"
-                value={latestStatus.latest_run.success_rate}
-                suffix="%"
-                valueStyle={{ 
-                  color: latestStatus.latest_run.success_rate === 100 ? '#52c41a' : 
-                         latestStatus.latest_run.success_rate < 80 ? '#f5222d' : '#faad14'
-                }}
-              />
-            </Col>
-            <Col span={6}>
-              <Statistic
-                title="测试总数"
-                value={latestStatus.latest_run.total_tests}
-                prefix={<ExperimentOutlined />}
-              />
-            </Col>
-            <Col span={6}>
-              <Statistic
-                title="失败数量"
-                value={latestStatus.latest_run.failed_tests}
-                prefix={<BugOutlined />}
-                valueStyle={{ color: latestStatus.latest_run.failed_tests > 0 ? '#f5222d' : '#52c41a' }}
-              />
-            </Col>
-          </Row>
-
-          {/* 失败测试提示 */}
-          {latestStatus.failed_tests && latestStatus.failed_tests.length > 0 && (
-            <Alert
-              message="存在失败的测试"
-              description={
-                <Collapse ghost size="small">
-                  <Panel header={`查看失败详情 (${latestStatus.failed_tests.length}个)`} key="1">
-                    {latestStatus.failed_tests.map((test, index) => (
-                      <div key={index} style={{ marginBottom: 8 }}>
-                        <Text code>{test.test_suite}.{test.test_name}</Text>
-                        <br />
-                        <Text type="danger" style={{ fontSize: 12 }}>
-                          {test.error_message}
-                        </Text>
-                      </div>
-                    ))}
-                  </Panel>
-                </Collapse>
-              }
-              type="error"
-              showIcon
-              style={{ marginTop: 16 }}
-            />
-          )}
-        </Card>
-      )}
+      {latestStatus && <LatestStatusCard latestStatus={latestStatus} />}
 
       {/* 筛选器 */}
       <Card bordered={false} style={{ marginBottom: 16 }}>
