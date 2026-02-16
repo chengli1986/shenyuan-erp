@@ -21,7 +21,7 @@ from app.schemas.purchase import (
     PurchaseRequestApprove, PurchaseRequestPriceQuote,
 )
 from app.services.purchase_service import PurchaseService
-from app.api.v1.purchase_utils import get_managed_project_ids
+from app.api.v1.purchase_utils import check_project_manager_access
 
 router = APIRouter()
 
@@ -43,17 +43,8 @@ async def submit_purchase_request(
         raise HTTPException(status_code=403, detail="只有项目经理可以提交申购单")
 
     # 项目权限检查
-    if current_user.role.value == "project_manager":
-        managed_projects = db.query(Project.id).filter(
-            Project.project_manager == current_user.name
-        ).all()
-
-        if managed_projects:
-            managed_project_ids = [p.id for p in managed_projects]
-            if request.project_id not in managed_project_ids:
-                raise HTTPException(status_code=403, detail="无权提交此申购单")
-        else:
-            raise HTTPException(status_code=403, detail="无权提交此申购单")
+    if not check_project_manager_access(db, current_user, request.project_id):
+        raise HTTPException(status_code=403, detail="无权提交此申购单")
 
     # 状态检查
     if request.status != PurchaseStatus.DRAFT:
@@ -263,8 +254,7 @@ async def return_purchase_request(
             raise HTTPException(status_code=400, detail="当前步骤不允许退回操作")
 
         # 项目级权限检查：只能退回自己负责项目的申购单
-        project = db.query(Project).filter(Project.id == request.project_id).first()
-        if not project or project.project_manager != current_user.name:
+        if not check_project_manager_access(db, current_user, request.project_id):
             raise HTTPException(status_code=403, detail="只能退回自己负责项目的申购单")
 
         # 查找采购员
@@ -519,17 +509,8 @@ async def get_purchase_workflow_logs(
         raise HTTPException(status_code=404, detail="申购单不存在")
 
     # 项目权限检查
-    if current_user.role.value == "project_manager":
-        managed_projects = db.query(Project.id).filter(
-            Project.project_manager == current_user.name
-        ).all()
-
-        if managed_projects:
-            managed_project_ids = [p.id for p in managed_projects]
-            if request.project_id not in managed_project_ids:
-                raise HTTPException(status_code=403, detail="无权查看此申购单的工作流历史")
-        else:
-            raise HTTPException(status_code=403, detail="无权查看此申购单的工作流历史")
+    if not check_project_manager_access(db, current_user, request.project_id):
+        raise HTTPException(status_code=403, detail="无权查看此申购单的工作流历史")
 
     # 由于数据库枚举值可能不匹配，暂时返回简化的工作流历史
     # 基于申购单的状态变化生成工作流历史
