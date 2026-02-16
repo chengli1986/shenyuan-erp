@@ -4,35 +4,16 @@ import {
   Button,
   Card,
   message,
-  Tag,
   Space,
-  Modal,
-  Popconfirm
 } from 'antd';
-import { PlusOutlined, EyeOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { ColumnsType } from 'antd/es/table';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SimplePurchaseDetail from './SimplePurchaseDetail';
 import PurchaseEditForm from './PurchaseEditForm';
-import WorkflowStatus, { PurchaseStatus, WorkflowStep } from '../../components/Purchase/WorkflowStatus';
+import { getPurchaseListColumns, WorkflowStatsCard } from './PurchaseListColumns';
+import type { SimplePurchaseRequest } from './PurchaseListColumns';
 import api from '../../services/api';
 import type { PurchaseDetailData } from '../../types/purchase';
-
-// 申购单类型定义（支持工作流）
-interface SimplePurchaseRequest {
-  id: number;
-  request_code: string;
-  project_id: number;
-  project_name?: string;
-  request_date: string;
-  status: PurchaseStatus;
-  current_step?: WorkflowStep;
-  current_approver_id?: number;
-  system_category?: string;
-  total_amount?: number;
-  remarks?: string;
-  items?: Record<string, unknown>[];
-}
 
 const SimplePurchaseList: React.FC = () => {
   const navigate = useNavigate();
@@ -58,7 +39,7 @@ const SimplePurchaseList: React.FC = () => {
       const response = await api.get(`purchases/`, {
         params: { page, size }
       });
-      
+
       const result = response.data;
       setData(result.items || []);
       setTotal(result.total || 0);
@@ -147,7 +128,7 @@ const SimplePurchaseList: React.FC = () => {
       return;
     }
 
-    const draftRequests = data.filter(item => 
+    const draftRequests = data.filter(item =>
       selectedRowKeys.includes(item.id) && item.status === 'draft'
     );
 
@@ -162,24 +143,24 @@ const SimplePurchaseList: React.FC = () => {
     }
 
     const idsToDelete = draftRequests.map(item => item.id);
-    
+
     // 使用原生confirm确认删除（避免Modal.confirm的异步问题）
     const confirmMessage = `确定要删除选中的 ${draftRequests.length} 个草稿申购单吗？\n申购单编号：${draftRequests.map(r => r.request_code).join(', ')}\n\n此操作不可恢复！`;
-    
+
     if (!window.confirm(confirmMessage)) {
       return;
     }
 
     setDeleteLoading(true);
-    
+
     try {
       const response = await api.post('purchases/batch-delete', idsToDelete);
       message.success(`批量删除成功！删除了 ${response.data.deleted_count} 个申购单`);
-      
+
       // 刷新数据和清除选中状态
       await loadPurchaseRequests(currentPage, pageSize);
       setSelectedRowKeys([]);
-      
+
     } catch (error: unknown) {
       console.error('批量删除错误:', error);
       message.error(error instanceof Error ? error.message : '批量删除失败');
@@ -207,7 +188,7 @@ const SimplePurchaseList: React.FC = () => {
   // 保存编辑
   const handleEditSave = async (editData: Record<string, unknown>) => {
     if (!currentEdit) return;
-    
+
     try {
       await api.put(`purchases/${currentEdit.id}`, editData);
       await loadPurchaseRequests(currentPage, pageSize);
@@ -230,115 +211,20 @@ const SimplePurchaseList: React.FC = () => {
     }),
   };
 
-  // 简化的表格列定义
-  const columns: ColumnsType<SimplePurchaseRequest> = [
-    {
-      title: '申购单号',
-      dataIndex: 'request_code',
-      key: 'request_code',
-      width: 200
-    },
-    {
-      title: '项目名称',
-      dataIndex: 'project_name',
-      key: 'project_name',
-      width: 200,
-      render: (value: string, record: SimplePurchaseRequest) => 
-        value || `项目ID: ${record.project_id}`
-    },
-    {
-      title: '申请日期',
-      dataIndex: 'request_date',
-      key: 'request_date',
-      width: 150,
-      render: (value: string) => new Date(value).toLocaleDateString('zh-CN')
-    },
-    {
-      title: '工作流状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 120,
-      render: (status: PurchaseStatus, record: SimplePurchaseRequest) => (
-        <WorkflowStatus 
-          status={status} 
-          currentStep={record.current_step}
-          showSteps={false}
-          size="small"
-        />
-      )
-    },
-    {
-      title: '总金额',
-      dataIndex: 'total_amount',
-      key: 'total_amount',
-      width: 100,
-      render: (amount: number) => {
-        if (!amount) return '-';
-        return `¥${amount.toLocaleString()}`;
-      }
-    },
-    {
-      title: '备注',
-      dataIndex: 'remarks',
-      key: 'remarks',
-      ellipsis: true,
-      render: (value: string) => value || '-'
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 200,
-      render: (_, record) => (
-        <Space>
-          <Button 
-            type="text" 
-            icon={<EyeOutlined />} 
-            size="small"
-            onClick={() => viewPurchaseDetail(record)}
-            loading={detailLoading}
-          >
-            查看
-          </Button>
-          {record.status === 'draft' && (
-            <Button 
-              type="text" 
-              icon={<EditOutlined />} 
-              size="small"
-              onClick={() => editPurchaseRequest(record)}
-              loading={editLoading}
-            >
-              编辑
-            </Button>
-          )}
-          {record.status === 'draft' && (
-            <Popconfirm
-              title="删除确认"
-              description={`确定要删除申购单 ${record.request_code} 吗？`}
-              onConfirm={() => deletePurchaseRequest(record.id, record.request_code)}
-              okText="确认删除"
-              cancelText="取消"
-              okType="danger"
-            >
-              <Button 
-                type="text" 
-                icon={<DeleteOutlined />} 
-                size="small"
-                danger
-                loading={deleteLoading}
-              >
-                删除
-              </Button>
-            </Popconfirm>
-          )}
-        </Space>
-      )
-    }
-  ];
+  // 表格列定义
+  const columns = getPurchaseListColumns({
+    onView: viewPurchaseDetail,
+    onEdit: editPurchaseRequest,
+    onDelete: deletePurchaseRequest,
+    detailLoading,
+    editLoading,
+    deleteLoading,
+  });
 
   return (
     <div style={{ padding: '24px' }}>
       {/* 简单的标题和操作栏 */}
-      <Card 
+      <Card
         title={
           <Space>
             <span>申购单管理 - 基础版本</span>
@@ -352,7 +238,7 @@ const SimplePurchaseList: React.FC = () => {
         extra={
           <Space>
             {selectedRowKeys.length > 0 && (
-              <Button 
+              <Button
                 danger
                 icon={<DeleteOutlined />}
                 onClick={batchDeletePurchaseRequests}
@@ -361,14 +247,14 @@ const SimplePurchaseList: React.FC = () => {
                 批量删除 ({selectedRowKeys.length})
               </Button>
             )}
-            <Button 
+            <Button
               loading={loading}
               onClick={() => loadPurchaseRequests(currentPage, pageSize, true)}
             >
               刷新数据
             </Button>
-            <Button 
-              type="primary" 
+            <Button
+              type="primary"
               icon={<PlusOutlined />}
               onClick={() => navigate('/purchases/create')}
             >
@@ -405,41 +291,18 @@ const SimplePurchaseList: React.FC = () => {
               loadPurchaseRequests(1, size);
             }
           }}
-          locale={{ 
-            emptyText: '暂无申购单数据，请点击"新建申购单"创建' 
+          locale={{
+            emptyText: '暂无申购单数据，请点击"新建申购单"创建'
           }}
         />
       </Card>
 
-      {/* 调试信息 */}
       {/* 工作流状态统计卡片 */}
-      <Card 
-        title="工作流统计" 
-        style={{ marginTop: '16px' }}
-        size="small"
-      >
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          {[
-            { status: 'draft', label: '草稿', color: '#faad14' },
-            { status: 'submitted', label: '已提交', color: '#1890ff' },
-            { status: 'price_quoted', label: '已询价', color: '#fa8c16' },
-            { status: 'dept_approved', label: '部门已批', color: '#13c2c2' },
-            { status: 'final_approved', label: '最终批准', color: '#52c41a' }
-          ].map(({ status, label, color }) => {
-            const count = data.filter(item => item.status === status).length;
-            return (
-              <div key={status} style={{ textAlign: 'center', minWidth: '80px' }}>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color }}>{count}</div>
-                <div style={{ fontSize: '12px', color: '#666' }}>{label}</div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
+      <WorkflowStatsCard data={data} />
 
       {/* 调试信息 */}
-      <Card 
-        title="调试信息" 
+      <Card
+        title="调试信息"
         style={{ marginTop: '16px' }}
         size="small"
       >
