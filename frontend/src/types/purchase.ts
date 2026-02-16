@@ -2,6 +2,21 @@
  * 采购请购相关的TypeScript类型定义
  */
 
+// 供应商、辅材模板、入库批次类型 — 从子模块导入并重新导出
+export type {
+  Supplier,
+  SupplierCreate,
+  SupplierUpdate,
+  SupplierListResponse,
+  SupplierQueryParams,
+  AuxiliaryTemplateItem,
+  AuxiliaryTemplate,
+  AuxiliaryTemplateCreate,
+  AuxiliaryRecommendation,
+  InboundBatch,
+  InboundBatchCreate,
+} from './purchase-supplier';
+
 // 枚举类型
 export enum PurchaseStatus {
   DRAFT = 'draft',
@@ -36,50 +51,6 @@ export enum UserRole {
   WORKER = 'worker'
 }
 
-// 供应商相关类型
-export interface Supplier {
-  id: number;
-  supplier_name: string;
-  supplier_code?: string;
-  contact_person?: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  business_license?: string;
-  tax_number?: string;
-  bank_account?: string;
-  rating?: number;
-  remarks?: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at?: string;
-}
-
-export interface SupplierCreate {
-  supplier_name: string;
-  supplier_code?: string;
-  contact_person?: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  business_license?: string;
-  tax_number?: string;
-  bank_account?: string;
-  rating?: number;
-  remarks?: string;
-}
-
-export interface SupplierUpdate {
-  supplier_name?: string;
-  contact_person?: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  rating?: number;
-  is_active?: boolean;
-  remarks?: string;
-}
-
 // 申购明细相关类型
 export interface PurchaseItem {
   id: number;
@@ -96,7 +67,7 @@ export interface PurchaseItem {
   supplier_id?: number;
   supplier_name?: string;
   supplier_contact?: string;
-  supplier_info?: Record<string, any>;
+  supplier_info?: Record<string, unknown>;
   estimated_delivery?: string;
   received_quantity: number;
   remaining_quantity: number;
@@ -212,90 +183,9 @@ export interface ApprovalRecord {
   can_view_price: boolean;
 }
 
-// 辅材模板相关类型
-export interface AuxiliaryTemplateItem {
-  item_name: string;
-  specification?: string;
-  unit?: string;
-  ratio?: number;
-  is_required: boolean;
-  reference_price?: number;
-  remarks?: string;
-  sort_order: number;
-}
-
-export interface AuxiliaryTemplate {
-  id: number;
-  template_name: string;
-  project_type?: string;
-  description?: string;
-  usage_count: number;
-  created_at: string;
-  updated_at?: string;
-  items: AuxiliaryTemplateItem[];
-}
-
-export interface AuxiliaryTemplateCreate {
-  template_name: string;
-  project_type?: string;
-  description?: string;
-  items: AuxiliaryTemplateItem[];
-}
-
-// 辅材智能推荐类型
-export interface AuxiliaryRecommendation {
-  item_name: string;
-  specification?: string;
-  unit?: string;
-  brand?: string;
-  ratio?: number;
-  is_required?: boolean;
-  reference_price?: number;
-  source: string;
-  confidence: number;
-  count?: number;
-  avg_quantity?: number;
-}
-
-// 入库批次相关类型
-export interface InboundBatch {
-  id: number;
-  batch_number: string;
-  purchase_request_item_id: number;
-  inbound_quantity: number;
-  unit_price?: number;
-  quality_status: string;
-  quality_check_notes?: string;
-  storage_location?: string;
-  supplier_batch_info?: Record<string, any>;
-  inbound_date: string;
-  operator_id?: number;
-  remarks?: string;
-  created_at: string;
-}
-
-export interface InboundBatchCreate {
-  purchase_request_item_id: number;
-  inbound_quantity: number;
-  unit_price?: number;
-  quality_status?: string;
-  quality_check_notes?: string;
-  storage_location?: string;
-  supplier_batch_info?: Record<string, any>;
-  remarks?: string;
-}
-
 // 列表响应类型
 export interface PurchaseRequestListResponse {
   items: PurchaseRequestWithItems[];
-  total: number;
-  page: number;
-  size: number;
-  pages: number;
-}
-
-export interface SupplierListResponse {
-  items: Supplier[];
   total: number;
   page: number;
   size: number;
@@ -421,11 +311,4 @@ export interface PurchaseRequestQueryParams {
   status?: PurchaseStatus;
   requester_id?: number;
   search?: string;
-}
-
-export interface SupplierQueryParams {
-  page?: number;
-  size?: number;
-  search?: string;
-  is_active?: boolean;
 }
