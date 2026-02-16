@@ -3,11 +3,15 @@
 根据v62开发文档的用户角色定义创建权限配置
 """
 
+import logging
+
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine
 from app.models import RolePermission, PermissionCategory, User
 from app.models.user import UserRole
 from app.core.security import get_password_hash
+
+logger = logging.getLogger(__name__)
 
 
 def create_permission_categories(db: Session):
@@ -170,7 +174,7 @@ def create_role_permissions(db: Session):
                 db.add(role_perm)
     
     db.commit()
-    print("✅ 权限配置创建完成")
+    logger.info("权限配置创建完成")
 
 
 def create_default_users(db: Session):
@@ -257,40 +261,32 @@ def create_default_users(db: Session):
             db.add(user)
     
     db.commit()
-    print("✅ 默认测试用户创建完成")
+    logger.info("默认测试用户创建完成")
 
 
 def main():
     """主初始化函数"""
-    print("🚀 开始初始化权限系统...")
-    
+    logger.info("开始初始化权限系统...")
+
     # 创建数据库表
     from app.core.database import Base
     Base.metadata.create_all(bind=engine)
-    
+
     db = SessionLocal()
     try:
         create_permission_categories(db)
-        print("✅ 权限分类创建完成")
-        
+        logger.info("权限分类创建完成")
+
         create_role_permissions(db)
-        print("✅ 角色权限映射创建完成")
-        
+        logger.info("角色权限映射创建完成")
+
         create_default_users(db)
-        print("✅ 默认用户创建完成")
-        
-        print("\n🎉 权限系统初始化完成！")
-        print("\n📋 默认用户账号:")
-        print("管理员: admin / admin123")
-        print("总经理: general_manager / gm123")  
-        print("工程主管: dept_manager / dept123")
-        print("项目经理: project_manager / pm123")
-        print("采购员: purchaser / purchase123")
-        print("施工队长: worker / worker123")
-        print("财务: finance / finance123")
-        
+        logger.info("默认用户创建完成")
+
+        logger.info("权限系统初始化完成")
+
     except Exception as e:
-        print(f"❌ 初始化失败: {e}")
+        logger.error(f"初始化失败: {e}")
         db.rollback()
     finally:
         db.close()
