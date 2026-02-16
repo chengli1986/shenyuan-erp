@@ -11,11 +11,7 @@ import {
   Button,
   Input,
   Select,
-  Space,
-  Tag,
-  Progress,
   message,
-  Popconfirm,
   Typography,
   Row,
   Col,
@@ -26,12 +22,7 @@ import {
 import {
   PlusOutlined,
   SearchOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  EyeOutlined,
-  FileTextOutlined
 } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
 import { Project, ProjectStatus, PROJECT_STATUS_CONFIG } from '../../types/project';
 import { ProjectService } from '../../services/project';
 import { useConnection } from '../../contexts/ConnectionContext';
@@ -39,6 +30,7 @@ import CreateProjectModal from '../../components/CreateProjectModal';
 import EditProjectModal from '../../components/EditProjectModal';
 import ProjectFileManager from '../../components/ProjectFileManager';
 import ContractManagement from '../Contract/ContractManagement';
+import { getProjectListColumns } from './ProjectListColumns';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -131,142 +123,13 @@ const ProjectList: React.FC = () => {
     setContractManagementVisible(true);
   };
 
-  // 格式化金额显示
-  const formatAmount = (amount?: number) => {
-    if (!amount) return '-';
-    return `¥${amount.toLocaleString()}`;
-  };
-
-  // 格式化日期显示
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('zh-CN');
-  };
-
   // 表格列定义
-  const columns: ColumnsType<Project> = [
-    {
-      title: '项目编号',
-      dataIndex: 'project_code',
-      key: 'project_code',
-      width: 120,
-      fixed: 'left',
-      render: (text) => <strong>{text}</strong>
-    },
-    {
-      title: '项目名称',
-      dataIndex: 'project_name',
-      key: 'project_name',
-      width: 200,
-      ellipsis: true,
-    },
-    {
-      title: '合同金额',
-      dataIndex: 'contract_amount',
-      key: 'contract_amount',
-      width: 120,
-      render: formatAmount,
-      sorter: (a, b) => (a.contract_amount || 0) - (b.contract_amount || 0),
-    },
-    {
-      title: '项目经理',
-      dataIndex: 'project_manager',
-      key: 'project_manager',
-      width: 100,
-      render: (text) => text || '-'
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      render: (status: ProjectStatus) => {
-        const config = PROJECT_STATUS_CONFIG[status];
-        return (
-          <Tag color={config.color}>
-            {config.icon} {config.text}
-          </Tag>
-        );
-      }
-    },
-    {
-      title: '整体进度',
-      dataIndex: 'overall_progress',
-      key: 'overall_progress',
-      width: 120,
-      render: (progress: number) => (
-        <Progress 
-          percent={Number(progress) || 0} 
-          size="small" 
-          format={(percent) => `${percent}%`}
-        />
-      )
-    },
-    {
-      title: '开始日期',
-      dataIndex: 'start_date',
-      key: 'start_date',
-      width: 110,
-      render: formatDate
-    },
-    {
-      title: '结束日期',
-      dataIndex: 'end_date',
-      key: 'end_date',
-      width: 110,
-      render: formatDate
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 200,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Button 
-            type="link" 
-            icon={<FileTextOutlined />} 
-            size="small"
-            onClick={() => handleContractManagement(record)}
-          >
-            合同清单
-          </Button>
-          <Button 
-            type="link" 
-            icon={<EyeOutlined />} 
-            size="small"
-            onClick={() => handleFileManager(record)}
-          >
-            文件
-          </Button>
-          <Button 
-            type="link" 
-            icon={<EditOutlined />} 
-            size="small"
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
-          <Popconfirm
-            title="确定要删除这个项目吗？"
-            description={`项目：${record.project_name}`}
-            onConfirm={() => handleDelete(record.id, record.project_name)}
-            okText="确定"
-            cancelText="取消"
-          >
-            <Button 
-              type="link" 
-              danger 
-              icon={<DeleteOutlined />} 
-              size="small"
-            >
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+  const columns = getProjectListColumns({
+    onContractManagement: handleContractManagement,
+    onFileManager: handleFileManager,
+    onEdit: handleEdit,
+    onDelete: handleDelete,
+  });
 
   // 计算统计数据
   const stats = {
@@ -286,8 +149,8 @@ const ProjectList: React.FC = () => {
           </Title>
         </Col>
         <Col>
-          <Button 
-            type="primary" 
+          <Button
+            type="primary"
             icon={<PlusOutlined />}
             onClick={() => setCreateModalVisible(true)}
           >
@@ -384,7 +247,7 @@ const ProjectList: React.FC = () => {
             total: total,
             showSizeChanger: true,
             showQuickJumper: true,
-            showTotal: (total, range) => 
+            showTotal: (total, range) =>
               `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
             onChange: (page, size) => {
               setCurrentPage(page);
