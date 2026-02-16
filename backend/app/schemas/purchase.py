@@ -8,6 +8,23 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, validator
 from enum import Enum
 
+# 供应商、辅材模板、入库批次 schemas — 从子模块导入并重新导出
+from app.schemas.purchase_supplier_schemas import (  # noqa: F401
+    SupplierBase,
+    SupplierCreate,
+    SupplierUpdate,
+    SupplierInDB,
+    SupplierListResponse,
+    AuxiliaryTemplateItemBase,
+    AuxiliaryTemplateBase,
+    AuxiliaryTemplateCreate,
+    AuxiliaryTemplateInDB,
+    InboundBatchBase,
+    InboundBatchCreate,
+    InboundBatchInDB,
+)
+
+
 class PurchaseStatus(str, Enum):
     """申购单状态"""
     DRAFT = "draft"
@@ -51,51 +68,6 @@ class PaymentMethod(str, Enum):
     BANK_TRANSFER = "BANK_TRANSFER"
 
 
-# ========== 供应商相关 ==========
-
-class SupplierBase(BaseModel):
-    """供应商基础信息"""
-    supplier_name: str
-    supplier_code: Optional[str] = None
-    contact_person: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    address: Optional[str] = None
-    business_license: Optional[str] = None
-    tax_number: Optional[str] = None
-    bank_account: Optional[str] = None
-    rating: Optional[int] = Field(default=3, ge=1, le=5)
-    remarks: Optional[str] = None
-
-
-class SupplierCreate(SupplierBase):
-    """创建供应商"""
-    pass
-
-
-class SupplierUpdate(BaseModel):
-    """更新供应商"""
-    supplier_name: Optional[str] = None
-    contact_person: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    address: Optional[str] = None
-    rating: Optional[int] = Field(None, ge=1, le=5)
-    is_active: Optional[bool] = None
-    remarks: Optional[str] = None
-
-
-class SupplierInDB(SupplierBase):
-    """数据库中的供应商"""
-    id: int
-    is_active: bool
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    
-    class Config:
-        from_attributes = True
-
-
 # ========== 申购明细相关 ==========
 
 class PurchaseItemBase(BaseModel):
@@ -114,7 +86,7 @@ class PurchaseItemBase(BaseModel):
 class PurchaseItemCreate(PurchaseItemBase):
     """创建申购明细（项目经理）"""
     pass
-    
+
     @validator('contract_item_id')
     def validate_contract_item(cls, v, values):
         """主材必须关联合同清单项"""
@@ -136,7 +108,7 @@ class PurchaseItemPriceQuote(BaseModel):
     supplier_contact_person: Optional[str] = None  # 新增：供应商联系人全名
     payment_method: Optional[str] = None  # 修改为字符串，支持自由输入付款方式
     estimated_delivery: Optional[datetime] = None
-    
+
     @validator('total_price', always=True)
     def calculate_total(cls, v, values):
         """自动计算总价"""
@@ -160,10 +132,10 @@ class PurchaseItemInDB(PurchaseItemBase):
     received_quantity: Decimal = Field(default=Decimal(0))
     remaining_quantity: Decimal = Field(default=Decimal(0))
     status: str = "pending"
-    
+
     # 关联字段（动态添加）
     system_category_name: Optional[str] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -191,10 +163,10 @@ class PurchaseItemWithoutPrice(BaseModel):
     remaining_quantity: Decimal
     status: str
     remarks: Optional[str] = None
-    
+
     # 关联字段（动态添加）
     system_category_name: Optional[str] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -212,7 +184,7 @@ class PurchaseRequestBase(BaseModel):
 class PurchaseRequestCreate(PurchaseRequestBase):
     """创建申购单"""
     items: List[PurchaseItemCreate]
-    
+
     @validator('items')
     def validate_items(cls, v):
         """至少包含一个申购项"""
@@ -267,20 +239,20 @@ class PurchaseRequestInDB(PurchaseRequestBase):
     requester_id: int
     status: PurchaseStatus
     total_amount: Optional[Decimal] = None
-    
+
     # 工作流字段
     current_step: str  # 暂时使用字符串类型
     current_approver_id: Optional[int] = None
-    
+
     # 采购信息
     payment_method: Optional[PaymentMethod] = None
     estimated_delivery_date: Optional[datetime] = None
-    
+
     # 审批信息
     approval_notes: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -302,11 +274,11 @@ class PurchaseRequestWithoutPrice(BaseModel):
     required_date: Optional[datetime] = None
     system_category: Optional[str] = None
     status: PurchaseStatus
-    
+
     # 工作流字段（项目经理需要看到）
     current_step: str  # 暂时使用字符串类型
     current_approver_id: Optional[int] = None
-    
+
     approval_notes: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -314,7 +286,7 @@ class PurchaseRequestWithoutPrice(BaseModel):
     requester_name: Optional[str] = None
     project_name: Optional[str] = None
     # 不包含 total_amount, payment_method, estimated_delivery_date 等价格和采购信息
-    
+
     class Config:
         from_attributes = True
 
@@ -331,7 +303,7 @@ class PurchaseWorkflowLog(BaseModel):
     operation_notes: Optional[str] = None
     operation_data: Optional[Dict[str, Any]] = None
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -354,76 +326,7 @@ class ApprovalRecordInDB(ApprovalRecordBase):
     request_id: int
     approval_date: datetime
     approver_name: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
 
-
-# ========== 辅材模板相关 ==========
-
-class AuxiliaryTemplateItemBase(BaseModel):
-    """辅材模板项基础信息"""
-    item_name: str
-    specification: Optional[str] = None
-    unit: Optional[str] = None
-    ratio: Optional[Decimal] = None
-    is_required: bool = False
-    reference_price: Optional[Decimal] = None
-    remarks: Optional[str] = None
-    sort_order: int = 0
-
-
-class AuxiliaryTemplateBase(BaseModel):
-    """辅材模板基础信息"""
-    template_name: str
-    project_type: Optional[str] = None
-    description: Optional[str] = None
-
-
-class AuxiliaryTemplateCreate(AuxiliaryTemplateBase):
-    """创建辅材模板"""
-    items: List[AuxiliaryTemplateItemBase]
-
-
-class AuxiliaryTemplateInDB(AuxiliaryTemplateBase):
-    """数据库中的辅材模板"""
-    id: int
-    usage_count: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    items: List[AuxiliaryTemplateItemBase]
-    
-    class Config:
-        from_attributes = True
-
-
-# ========== 入库批次相关 ==========
-
-class InboundBatchBase(BaseModel):
-    """入库批次基础信息"""
-    purchase_request_item_id: int
-    inbound_quantity: Decimal = Field(..., gt=0)
-    unit_price: Optional[Decimal] = None
-    quality_status: str = "qualified"
-    quality_check_notes: Optional[str] = None
-    storage_location: Optional[str] = None
-    supplier_batch_info: Optional[Dict[str, Any]] = None
-    remarks: Optional[str] = None
-
-
-class InboundBatchCreate(InboundBatchBase):
-    """创建入库批次"""
-    pass
-
-
-class InboundBatchInDB(InboundBatchBase):
-    """数据库中的入库批次"""
-    id: int
-    batch_number: str
-    inbound_date: datetime
-    operator_id: Optional[int] = None
-    created_at: datetime
-    
     class Config:
         from_attributes = True
 
@@ -433,15 +336,6 @@ class InboundBatchInDB(InboundBatchBase):
 class PurchaseRequestListResponse(BaseModel):
     """申购单列表响应"""
     items: List[PurchaseRequestWithItems]
-    total: int
-    page: int
-    size: int
-    pages: int
-
-
-class SupplierListResponse(BaseModel):
-    """供应商列表响应"""
-    items: List[SupplierInDB]
     total: int
     page: int
     size: int
