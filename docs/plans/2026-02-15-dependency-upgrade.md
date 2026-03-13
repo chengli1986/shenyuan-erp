@@ -260,10 +260,10 @@ Move `frontend/public/index.html` to `frontend/index.html` and update it:
     <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
-    <meta name="description" content="深源ERP系统" />
+    <meta name="description" content="申源ERP系统" />
     <link rel="apple-touch-icon" href="/logo192.png" />
     <link rel="manifest" href="/manifest.json" />
-    <title>深源ERP系统</title>
+    <title>申源ERP系统</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

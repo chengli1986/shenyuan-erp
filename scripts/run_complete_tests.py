@@ -232,7 +232,7 @@ def run_pytest_tests():
 def main():
     """主函数"""
     print("=" * 60)
-    print("🚀 深源ERP系统完整功能测试")
+    print("🚀 申源ERP系统完整功能测试")
     print(f"⏰ 开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
     

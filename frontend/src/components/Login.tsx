@@ -58,7 +58,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       minHeight: '100vh',
       background: '#f0f2f5'
     }}>
-      <Card title="深源ERP系统 - 用户登录" style={{ width: 400 }}>
+      <Card title="申源ERP系统 - 用户登录" style={{ width: 400 }}>
         <Form
           name="login"
           initialValues={{ remember: true }}

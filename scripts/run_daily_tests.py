@@ -78,7 +78,7 @@ def generate_daily_report(test_results):
     success_rate = (passed_tests / total_tests * 100) if total_tests > 0 else 0
     
     report_content = f"""
-深源ERP系统每日回归测试报告
+申源ERP系统每日回归测试报告
 ============================
 生成时间: {timestamp}
 测试日期: {report_date}
