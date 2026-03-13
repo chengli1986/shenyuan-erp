@@ -54,7 +54,25 @@
       "Bash(sqlite3:*)",
       "Bash(export:*)",
       "Bash(export PORT=3000)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(wc:*)",
+      "Bash(python3:*)",
+      "Bash(uniq __NEW_LINE_b70c6bfb7a79f07e__ cat EOF)",
+      "Bash(cut:*)",
+      "WebSearch",
+      "Bash(pip index:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(npx vite build)",
+      "Bash(node -e:*)",
+      "Bash(sudo iptables:*)",
+      "Bash(sudo ufw status:*)",
+      "Bash(echo:*)",
+      "Bash(git -C /home/ubuntu/shenyuan-erp log 8656c4faa2082a6c5d0c4e5a963f7cc2cb2fddff..HEAD --oneline)",
+      "Bash(git -C /home/ubuntu/shenyuan-erp show 8656c4faa2082a6c5d0c4e5a963f7cc2cb2fddff:frontend/src/pages/Purchase/PurchaseEditForm.tsx)",
+      "Bash(git -C /home/ubuntu/shenyuan-erp show 8656c4faa2082a6c5d0c4e5a963f7cc2cb2fddff:frontend/src/pages/Purchase/hooks/usePurchaseEditForm.ts)",
+      "Bash(git -C /home/ubuntu/shenyuan-erp show 8656c4faa2082a6c5d0c4e5a963f7cc2cb2fddff:frontend/src/pages/Purchase/PurchaseEditFormItems.tsx)",
+      "Bash(git -C /home/ubuntu/shenyuan-erp diff 8656c4faa2082a6c5d0c4e5a963f7cc2cb2fddff..HEAD -- frontend/src/pages/Purchase/PurchaseEditForm.tsx)",
+      "Bash(bc:*)"
     ],
     "deny": []
   }
