@@ -14,7 +14,9 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+from app.api import deps
 from app.core.database import get_db
+from app.models.user import User
 from app.models.project import Project
 from app.models.contract import ContractFileVersion, SystemCategory, ContractItem
 from app.schemas.contract import ExcelUploadResponse
@@ -101,7 +103,8 @@ async def upload_contract_excel(
     upload_user_name: str = Form(..., description="上传人员姓名"),
     upload_reason: Optional[str] = Form(None, description="上传原因说明"),
     change_description: Optional[str] = Form(None, description="变更详细说明"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     上传并解析合同清单Excel文件
@@ -268,7 +271,8 @@ async def upload_contract_excel(
 @router.get("/projects/{project_id}/contract-files")
 async def list_contract_files(
     project_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     获取项目的所有合同清单文件列表
@@ -310,7 +314,8 @@ async def list_contract_files(
 async def delete_contract_file(
     project_id: int,
     version_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     删除合同清单文件和相关数据

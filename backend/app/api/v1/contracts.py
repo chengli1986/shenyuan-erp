@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 import logging
 import os
 
+from app.api import deps
 from app.core.database import get_db
+from app.models.user import User
 from app.models.project import Project
 from app.models.contract import ContractFileVersion, SystemCategory, ContractItem
 from app.schemas.contract import (
@@ -29,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ============================
 
 @router.get("/projects/{project_id}/versions/{version_id}/categories")
-async def get_system_categories_list(project_id: int, version_id: int, db: Session = Depends(get_db)):
+async def get_system_categories_list(project_id: int, version_id: int, db: Session = Depends(get_db), current_user: User = Depends(deps.get_current_user)):
     """Get system categories for a specific version"""
     categories = db.query(SystemCategory).filter(
         SystemCategory.project_id == project_id,
@@ -57,7 +59,7 @@ async def get_system_categories_list(project_id: int, version_id: int, db: Sessi
     return result
 
 @router.get("/projects/{project_id}/versions/{version_id}/categories-working")
-async def get_system_categories_working(project_id: int, version_id: int, db: Session = Depends(get_db)):
+async def get_system_categories_working(project_id: int, version_id: int, db: Session = Depends(get_db), current_user: User = Depends(deps.get_current_user)):
     """Get system categories for a specific version - proper implementation"""
     try:
         categories = db.query(SystemCategory).filter(
@@ -95,7 +97,8 @@ async def create_system_category(
     category_data: SystemCategoryCreate,
     project_id: int = Path(..., description="项目ID"),
     version_id: int = Path(..., description="版本ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     创建新的系统分类
@@ -145,7 +148,8 @@ async def create_system_category(
 @router.get("/projects/{project_id}/contract-summary", response_model=ContractSummaryResponse)
 async def get_contract_summary(
     project_id: int = Path(..., description="项目ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     获取项目合同清单汇总信息
@@ -210,7 +214,8 @@ async def get_contract_summary(
 async def download_contract_file(
     project_id: int = Path(..., description="项目ID"),
     version_id: int = Path(..., description="版本ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     下载合同清单文件

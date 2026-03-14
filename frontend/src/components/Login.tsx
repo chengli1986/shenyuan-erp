@@ -3,11 +3,9 @@
  */
 
 import React, { useState } from 'react';
-import { Form, Input, Button, Card, message, Select } from 'antd';
+import { Form, Input, Button, Card, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { authService, LoginRequest } from '../services/auth';
-
-const { Option } = Select;
 
 interface LoginProps {
   onLoginSuccess: () => void;
@@ -15,18 +13,6 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
-
-  // 预设账号列表
-  const presetAccounts = [
-    { username: 'admin', password: 'admin123', name: '系统管理员' },
-    { username: 'general_manager', password: 'gm123', name: '张总经理' },
-    { username: 'dept_manager', password: 'dept123', name: '李工程部主管' },
-    { username: 'sunyun', password: 'sunyun123', name: '孙赟(项目经理)' },
-    { username: 'liqiang', password: 'liqiang123', name: '李强(项目经理)' },
-    { username: 'purchaser', password: 'purchase123', name: '赵采购员' },
-    { username: 'worker', password: 'worker123', name: '刘施工队长' },
-    { username: 'finance', password: 'finance123', name: '陈财务' },
-  ];
 
   const onFinish = async (values: LoginRequest) => {
     setLoading(true);
@@ -41,13 +27,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickLogin = (account: { username: string; password: string; name: string }) => {
-    onFinish({
-      username: account.username,
-      password: account.password,
-    });
   };
 
   return (
@@ -96,22 +75,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             </Button>
           </Form.Item>
         </Form>
-
-        <div style={{ marginTop: 16 }}>
-          <h4>快速登录（测试用）</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            {presetAccounts.map((account) => (
-              <Button
-                key={account.username}
-                size="small"
-                onClick={() => handleQuickLogin(account)}
-                disabled={loading}
-              >
-                {account.name}
-              </Button>
-            ))}
-          </div>
-        </div>
       </Card>
     </div>
   );

@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic import ConfigDict, model_validator
 
 class Settings(BaseSettings):
     app_name: str = "弱电工程ERP系统"
@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "MUST-BE-SET-IN-ENV-FILE"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8天
     ALGORITHM: str = "HS256"
+
+    @model_validator(mode="after")
+    def validate_secret_key(self) -> "Settings":
+        if self.SECRET_KEY == "MUST-BE-SET-IN-ENV-FILE":
+            raise ValueError(
+                "SECRET_KEY must be set in .env file - do not use the default value"
+            )
+        return self
 
     # CORS配置
     backend_cors_origins: list = [

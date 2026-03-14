@@ -7,7 +7,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.orm import Session
 
+from app.api import deps
 from app.core.database import get_db
+from app.models.user import User
 from app.models.contract import ContractFileVersion, SystemCategory, ContractItem
 from app.schemas.contract import (
     ContractItemCreate,
@@ -27,7 +29,8 @@ async def get_contract_items(
     search: Optional[str] = Query(None, description="搜索关键词"),
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     获取合同清单明细列表
@@ -91,7 +94,8 @@ async def create_contract_item(
     item_data: ContractItemCreate,
     project_id: int = Path(..., description="项目ID"),
     version_id: int = Path(..., description="版本ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     创建新的合同清单明细
@@ -143,7 +147,8 @@ async def get_contract_item(
     project_id: int = Path(..., description="项目ID"),
     version_id: int = Path(..., description="版本ID"),
     item_id: int = Path(..., description="明细ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     获取单个合同清单明细
@@ -168,7 +173,8 @@ async def update_contract_item(
     project_id: int = Path(..., description="项目ID"),
     version_id: int = Path(..., description="版本ID"),
     item_id: int = Path(..., description="明细ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     更新合同清单明细

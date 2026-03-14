@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 from typing import List
 import math
 
+from app.api import deps
 from app.core.database import get_db
 from app.models.project import Project
+from app.models.user import User
 from app.schemas.project import (
     ProjectCreate, 
     ProjectUpdate, 
@@ -29,7 +31,8 @@ async def get_projects(
     size: int = Query(10, ge=1, le=100, description="每页数量"),
     search: str = Query(None, description="搜索关键词"),
     status: str = Query(None, description="状态筛选"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     获取项目列表
@@ -75,7 +78,8 @@ async def get_projects(
 @router.post("/", response_model=ProjectResponse)
 async def create_project(
     project: ProjectCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     创建新项目
@@ -109,7 +113,8 @@ async def create_project(
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     获取单个项目详情
@@ -133,7 +138,8 @@ async def get_project(
 async def update_project(
     project_id: int,
     project_update: ProjectUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     更新项目信息
@@ -167,7 +173,8 @@ async def update_project(
 @router.delete("/{project_id}")
 async def delete_project(
     project_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     删除项目

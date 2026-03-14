@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db, get_current_user, get_current_superuser
 from app.core.config import settings
 from app.core.security import (
     authenticate_user,
@@ -102,7 +102,7 @@ def register(
     *,
     db: Session = Depends(get_db),
     user_data: UserRegister,
-    # current_user: User = Depends(get_current_superuser)  # 只有超级管理员可以注册新用户
+    current_user: User = Depends(get_current_superuser),  # 只有超级管理员可以注册新用户
 ) -> Any:
     """用户注册（仅管理员）"""
     # 检查用户名是否已存在
@@ -152,37 +152,3 @@ def read_user_me(
 def test_token(current_user: User = Depends(get_current_user)) -> Any:
     """测试访问令牌"""
     return current_user
-
-
-# 临时端点：创建初始管理员用户
-@router.post("/create-admin")
-def create_admin_user(db: Session = Depends(get_db)) -> Any:
-    """创建初始管理员用户（仅在没有管理员时可用）"""
-    # 检查是否已有管理员
-    admin_exists = db.query(User).filter(
-        User.role == UserRole.ADMIN
-    ).first()
-    
-    if admin_exists:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="管理员用户已存在"
-        )
-    
-    # 创建默认管理员
-    admin = User(
-        username="admin",
-        email="admin@example.com",
-        name="系统管理员",
-        password_hash=get_password_hash("admin123"),
-        role=UserRole.ADMIN,
-        department="系统管理部",
-        is_active=True,
-        is_superuser=True
-    )
-    
-    db.add(admin)
-    db.commit()
-    db.refresh(admin)
-    
-    return {"message": "管理员用户创建成功", "username": "admin", "password": "admin123"}

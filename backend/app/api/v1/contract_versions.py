@@ -6,7 +6,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.orm import Session
 
+from app.api import deps
 from app.core.database import get_db
+from app.models.user import User
 from app.models.project import Project
 from app.models.contract import ContractFileVersion
 from app.schemas.contract import (
@@ -20,7 +22,8 @@ router = APIRouter()
 @router.get("/projects/{project_id}/contract-versions", response_model=List[ContractFileVersionResponse])
 async def get_contract_versions(
     project_id: int = Path(..., description="项目ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     获取项目的所有合同清单版本
@@ -44,7 +47,8 @@ async def get_contract_versions(
 @router.get("/projects/{project_id}/contract-versions/current", response_model=ContractFileVersionResponse)
 async def get_current_contract_version(
     project_id: int = Path(..., description="项目ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     获取项目的当前合同清单版本
@@ -73,7 +77,8 @@ async def get_current_contract_version(
 async def create_contract_version(
     version_data: ContractFileVersionCreate,
     project_id: int = Path(..., description="项目ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """
     创建新的合同清单版本

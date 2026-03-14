@@ -13,8 +13,10 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 import mimetypes
 
+from app.api import deps
 from app.core.database import get_db
 from app.models.project import Project
+from app.models.user import User
 from app.models.project_file import ProjectFile, FileType
 from app.schemas.project_file import (
     ProjectFileResponse, 
@@ -36,7 +38,8 @@ UPLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
 async def get_project_files(
     project_id: int,
     file_type: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """获取项目文件列表"""
     # 检查项目是否存在
@@ -70,7 +73,8 @@ async def upload_project_file(
     file_type: str = Form(...),
     description: Optional[str] = Form(None),
     uploaded_by: str = Form("系统管理员"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """上传项目文件 - 修复版本"""
     # 检查项目是否存在
@@ -171,7 +175,8 @@ async def upload_project_file(
 async def download_project_file(
     project_id: int,
     file_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """下载项目文件"""
     file_record = db.query(ProjectFile).filter(
@@ -197,7 +202,8 @@ async def download_project_file(
 async def preview_project_file(
     project_id: int,
     file_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """预览项目文件 - 新增接口"""
     file_record = db.query(ProjectFile).filter(
@@ -227,7 +233,8 @@ async def preview_project_file(
 async def delete_project_file(
     project_id: int,
     file_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """删除项目文件"""
     file_record = db.query(ProjectFile).filter(
@@ -259,7 +266,8 @@ async def delete_project_file(
 async def get_file_info(
     project_id: int,
     file_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """获取文件详细信息 - 新增接口"""
     file_record = db.query(ProjectFile).filter(
@@ -279,7 +287,8 @@ async def update_file_info(
     file_id: int,
     description: Optional[str] = Form(None),
     file_type: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """更新文件信息 - 新增接口"""
     file_record = db.query(ProjectFile).filter(
@@ -315,7 +324,8 @@ async def update_file_info(
 async def check_file_exists(
     project_id: int,
     file_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     """检查文件是否存在 - 新增接口"""
     file_record = db.query(ProjectFile).filter(
@@ -334,7 +344,7 @@ async def check_file_exists(
 
 
 @router.get("/file-types")
-async def get_file_types():
+async def get_file_types(current_user: User = Depends(deps.get_current_user)):
     """获取支持的文件类型配置"""
     return {
         "file_types": [
