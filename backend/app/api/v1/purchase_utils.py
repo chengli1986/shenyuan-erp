@@ -25,6 +25,10 @@ def get_managed_project_ids(db: Session, current_user: User) -> Optional[List[in
 
     # Fall back to name-based matching when project_manager_id is NULL
     # (handles rows created before the FK column was backfilled)
+    # TODO: TEMPORARY FALLBACK — remove the name-based branch once all
+    # Project rows have been backfilled with a valid project_manager_id FK.
+    # Name-based matching is fragile: duplicate display names would let a
+    # project manager see/manage projects they don't own.
     managed_projects = db.query(Project.id).filter(
         or_(
             Project.project_manager_id == current_user.id,
