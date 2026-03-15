@@ -100,7 +100,6 @@ def save_uploaded_file(file: UploadFile, project_id: int) -> str:
 async def upload_contract_excel(
     project_id: int,
     file: UploadFile = File(..., description="Excel合同清单文件"),
-    upload_user_name: str = Form(..., description="上传人员姓名"),
     upload_reason: Optional[str] = Form(None, description="上传原因说明"),
     change_description: Optional[str] = Form(None, description="变更详细说明"),
     db: Session = Depends(get_db),
@@ -123,7 +122,10 @@ async def upload_contract_excel(
     
     # 验证文件
     validate_file(file)
-    
+
+    # 去除文件名中的目录路径部分，防止路径遍历攻击
+    file.filename = Path(file.filename).name
+
     # 保存文件
     file_path = save_uploaded_file(file, project_id)
     
@@ -152,8 +154,8 @@ async def upload_contract_excel(
         new_version = ContractFileVersion(
             project_id=project_id,
             version_number=next_version_number,
-            upload_user_name=upload_user_name,
-            original_filename=file.filename,
+            upload_user_name=current_user.name,
+            original_filename=Path(file.filename).name,
             stored_filename=Path(file_path).name,
             file_size=Path(file_path).stat().st_size,
             upload_reason=upload_reason,

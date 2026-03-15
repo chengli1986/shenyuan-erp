@@ -34,8 +34,12 @@ api.interceptors.response.use(
     console.error('API请求错误:', error);
 
     // 401未授权，清除用户信息并跳转登录
-    if (error.response?.status === 401) {
-      localStorage.removeItem('currentUser');
+    // 跳过verifySession自身触发的401（由verifySession内部处理）
+    if (error.response?.status === 401 && !error.config?._skipAuthRedirect) {
+      // 延迟导入避免循环依赖
+      import('./auth').then(({ authService }) => {
+        authService.clearSession();
+      });
       window.location.reload();
     }
 

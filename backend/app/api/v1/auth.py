@@ -78,7 +78,7 @@ def login(
         max_age=COOKIE_MAX_AGE,
         httponly=True,       # JavaScript无法读取
         samesite="lax",      # 防止CSRF
-        secure=False,        # 开发环境用HTTP；生产环境改为True
+        secure=settings.COOKIE_SECURE,  # Set COOKIE_SECURE=true in .env when using HTTPS
         path="/",            # 所有路径都发送cookie
     )
     return response

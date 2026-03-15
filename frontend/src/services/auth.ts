@@ -92,6 +92,41 @@ export class AuthService {
     localStorage.setItem('currentUser', JSON.stringify(response.data));
     return response.data;
   }
+
+  /**
+   * 验证当前会话是否有效（HttpOnly Cookie是否仍然有效）
+   * 在应用启动时调用，如果cookie过期则清除前端状态
+   * @returns true 如果会话有效，false 如果无效（已自动清除状态）
+   */
+  async verifySession(): Promise<boolean> {
+    // 如果localStorage中没有用户信息，无需验证
+    if (!this.currentUser) {
+      return false;
+    }
+
+    try {
+      // _skipAuthRedirect 避免触发api.ts中的全局401拦截器导致重复处理
+      const response = await api.get<User>('/auth/me', {
+        _skipAuthRedirect: true,
+      } as any);
+      // 会话有效，顺便刷新用户信息
+      this.currentUser = response.data;
+      localStorage.setItem('currentUser', JSON.stringify(response.data));
+      return true;
+    } catch {
+      // 401或其他错误表示会话无效，清除前端状态
+      this.clearSession();
+      return false;
+    }
+  }
+
+  /**
+   * 清除前端会话状态（不调用后端登出接口）
+   */
+  clearSession(): void {
+    localStorage.removeItem('currentUser');
+    this.currentUser = null;
+  }
 }
 
 export const authService = AuthService.getInstance();

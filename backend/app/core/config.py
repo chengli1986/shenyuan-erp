@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     # 安全配置
     SECRET_KEY: str = "MUST-BE-SET-IN-ENV-FILE"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8天
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24小时 (for higher security, consider implementing refresh tokens)
     ALGORITHM: str = "HS256"
 
     @model_validator(mode="after")
@@ -21,6 +21,9 @@ class Settings(BaseSettings):
                 "SECRET_KEY must be set in .env file - do not use the default value"
             )
         return self
+
+    # Cookie安全配置
+    COOKIE_SECURE: bool = False  # Set COOKIE_SECURE=true in .env when using HTTPS
 
     # CORS配置
     backend_cors_origins: list = [

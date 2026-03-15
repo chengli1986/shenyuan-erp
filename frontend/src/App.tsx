@@ -36,10 +36,27 @@ function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  
+  const [sessionVerified, setSessionVerified] = useState(false);
+
   useEffect(() => {
     const user = authService.getCurrentUser();
     setCurrentUser(user);
+
+    // 应用启动时验证HttpOnly Cookie会话是否仍然有效
+    if (user) {
+      authService.verifySession().then((isValid) => {
+        if (!isValid) {
+          // Cookie已过期，清除前端状态，显示登录页
+          setCurrentUser(null);
+        } else {
+          // 会话有效，用最新的用户信息更新状态
+          setCurrentUser(authService.getCurrentUser());
+        }
+        setSessionVerified(true);
+      });
+    } else {
+      setSessionVerified(true);
+    }
   }, []);
   
   // 菜单项配置
@@ -85,6 +102,11 @@ function AppContent() {
     const user = authService.getCurrentUser();
     setCurrentUser(user);
   };
+
+  // 等待会话验证完成，避免闪烁
+  if (!sessionVerified) {
+    return null;
+  }
 
   // 如果用户未登录，显示登录页面
   if (!authService.isLoggedIn()) {
