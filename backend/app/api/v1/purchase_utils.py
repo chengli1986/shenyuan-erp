@@ -24,7 +24,7 @@ def get_managed_project_ids(db: Session, current_user: User) -> Optional[List[in
         return None
 
     managed_projects = db.query(Project.id).filter(
-        Project.project_manager == current_user.name
+        Project.project_manager_id == current_user.id
     ).all()
 
     if managed_projects:
@@ -51,39 +51,71 @@ def enrich_purchase_item_details(db: Session, result: dict):
     """
     为申购明细添加系统分类名称和剩余数量信息
     直接修改传入的result字典
+    使用批量查询避免N+1问题
     """
     if 'items' not in result or not result['items']:
         return
 
     from app.models.contract import SystemCategory, ContractItem
 
+    # 批量获取所有需要的系统分类
+    category_ids = list({
+        item['system_category_id'] for item in result['items']
+        if item.get('system_category_id')
+    })
+    category_map = {}
+    if category_ids:
+        categories = db.query(SystemCategory).filter(
+            SystemCategory.id.in_(category_ids)
+        ).all()
+        category_map = {c.id: c.category_name for c in categories}
+
+    # 批量获取所有需要的合同清单项
+    contract_item_ids = list({
+        item['contract_item_id'] for item in result['items']
+        if item.get('item_type') == 'main' and item.get('contract_item_id')
+    })
+    contract_item_map = {}
+    if contract_item_ids:
+        contract_items = db.query(ContractItem).filter(
+            ContractItem.id.in_(contract_item_ids)
+        ).all()
+        contract_item_map = {ci.id: ci for ci in contract_items}
+
+    # 批量获取已申购数量（按contract_item_id分组）
+    purchased_qty_map = {}
+    if contract_item_ids:
+        # 收集所有需要查询的item IDs
+        item_ids_for_sum = [
+            item.get('id') for item in result['items']
+            if item.get('item_type') == 'main' and item.get('contract_item_id')
+        ]
+        purchased_rows = db.query(
+            PurchaseRequestItem.contract_item_id,
+            func.sum(PurchaseRequestItem.quantity)
+        ).join(
+            PurchaseRequest
+        ).filter(
+            PurchaseRequestItem.contract_item_id.in_(contract_item_ids),
+            PurchaseRequestItem.item_type == "main",
+            PurchaseRequest.status.in_([PurchaseStatus.FINAL_APPROVED, PurchaseStatus.COMPLETED])
+        ).group_by(
+            PurchaseRequestItem.contract_item_id
+        ).all()
+        purchased_qty_map = {row[0]: row[1] or 0 for row in purchased_rows}
+
     for item in result['items']:
         # 添加系统分类名称
         if item.get('system_category_id'):
-            category = db.query(SystemCategory).filter(
-                SystemCategory.id == item['system_category_id']
-            ).first()
-            item['system_category_name'] = category.category_name if category else None
+            item['system_category_name'] = category_map.get(item['system_category_id'])
         else:
             item['system_category_name'] = None
 
         # 为主材添加合同清单的剩余数量信息
         if item.get('item_type') == 'main' and item.get('contract_item_id'):
-            contract_item = db.query(ContractItem).filter(
-                ContractItem.id == item['contract_item_id']
-            ).first()
+            contract_item = contract_item_map.get(item['contract_item_id'])
             if contract_item:
-                # 计算剩余数量：合同数量 - 已申购数量
-                # 获取该合同清单项已申购的总数量（只统计总经理已批准和已完成的申购单）
-                purchased_quantity = db.query(func.sum(PurchaseRequestItem.quantity)).join(
-                    PurchaseRequest
-                ).filter(
-                    PurchaseRequestItem.contract_item_id == contract_item.id,
-                    PurchaseRequestItem.item_type == "main",
-                    PurchaseRequest.status.in_([PurchaseStatus.FINAL_APPROVED, PurchaseStatus.COMPLETED])
-                ).scalar() or 0
-
-                # 计算剩余数量
+                purchased_quantity = purchased_qty_map.get(contract_item.id, 0)
                 remaining = float(contract_item.quantity) - float(purchased_quantity)
                 item['remaining_quantity'] = max(0, remaining)
                 item['max_quantity'] = float(contract_item.quantity)

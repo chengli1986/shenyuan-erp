@@ -92,6 +92,7 @@ class PurchaseRequest(Base):
     project = relationship("Project", back_populates="purchase_requests")
     items = relationship("PurchaseRequestItem", back_populates="purchase_request", cascade="all, delete-orphan")
     approvals = relationship("PurchaseApproval", back_populates="purchase_request", cascade="all, delete-orphan")
+    workflow_logs = relationship("PurchaseWorkflowLog", back_populates="purchase_request", cascade="all, delete-orphan")
 
 
 class PurchaseRequestItem(Base):
@@ -195,7 +196,7 @@ class PurchaseWorkflowLog(Base):
     created_at = Column(DateTime, server_default=func.now())
     
     # 关系
-    purchase_request = relationship("PurchaseRequest", backref="workflow_logs")
+    purchase_request = relationship("PurchaseRequest", back_populates="workflow_logs")
     operator = relationship("User", backref="workflow_operations")
 
 

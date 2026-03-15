@@ -5,7 +5,7 @@
 就像设计一张表格，告诉数据库每一列是什么类型的数据
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, Numeric, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Text, Numeric, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -43,6 +43,7 @@ class Project(Base):
     
     # 项目负责人
     project_manager = Column(String(100), comment="项目经理")
+    project_manager_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="项目经理用户ID")
     
     # 项目状态 - 使用枚举确保数据一致性
     status = Column(Enum(ProjectStatus), default=ProjectStatus.PLANNING, comment="项目状态")

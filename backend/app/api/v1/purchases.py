@@ -80,11 +80,25 @@ async def get_purchase_requests(
     total = query.count()
     items = query.offset((page - 1) * size).limit(size).all()
 
+    # 批量获取项目名称和申请人名称，避免N+1查询
+    project_ids = list({item.project_id for item in items if item.project_id})
+    requester_ids = list({item.requester_id for item in items if item.requester_id})
+
+    project_map = {}
+    if project_ids:
+        projects = db.query(Project).filter(Project.id.in_(project_ids)).all()
+        project_map = {p.id: p.project_name for p in projects}
+
+    requester_map = {}
+    if requester_ids:
+        requesters = db.query(User).filter(User.id.in_(requester_ids)).all()
+        requester_map = {u.id: u.name for u in requesters}
+
     # 根据角色返回不同的数据视图
     result_items = []
     for item in items:
-        # 获取项目名称和申请人名称
-        project_name, requester_name = get_project_and_requester_names(db, item)
+        project_name = project_map.get(item.project_id)
+        requester_name = requester_map.get(item.requester_id, "系统管理员")
 
         if current_user.role.value == "project_manager":
             # 项目经理看不到价格信息
@@ -194,7 +208,7 @@ async def update_purchase_request(
     # 2. 项目经理可以编辑负责项目的草稿申购单
     elif current_user.role.value == "project_manager":
         project = db.query(Project).filter(Project.id == request.project_id).first()
-        if project and project.project_manager == current_user.name:
+        if project and project.project_manager_id == current_user.id:
             can_edit = True
 
     # 3. 管理员可以编辑任何申购单
@@ -283,8 +297,8 @@ async def delete_purchase_request(
     elif current_user.role.value == "project_manager":
         # 查询项目信息确认项目经理权限
         # 避免lazy loading问题，只查询需要的字段
-        project_result = db.query(Project.project_manager).filter(Project.id == request.project_id).first()
-        if project_result and project_result[0] == current_user.name:
+        project_result = db.query(Project.project_manager_id).filter(Project.id == request.project_id).first()
+        if project_result and project_result[0] == current_user.id:
             can_delete = True
 
     # 4. 采购员可以删除任何草稿申购单（采购员需要管理所有申购单）
@@ -355,7 +369,7 @@ async def batch_delete_purchase_requests(
             elif current_user.role.value == "project_manager":
                 # 查询项目信息确认项目经理权限
                 project = db.query(Project).filter(Project.id == request.project_id).first()
-                if project and project.project_manager == current_user.name:
+                if project and project.project_manager_id == current_user.id:
                     can_delete = True
 
             # 4. 采购员可以删除任何草稿申购单（采购员需要管理所有申购单）
