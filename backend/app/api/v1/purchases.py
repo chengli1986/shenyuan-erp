@@ -2,11 +2,14 @@
 采购请购API接口 - CRUD操作
 """
 
+import logging
 from typing import List, Optional
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+
+logger = logging.getLogger(__name__)
 
 from app.api import deps
 from app.core.database import get_db
@@ -99,6 +102,8 @@ async def get_purchase_requests(
     for item in items:
         project_name = project_map.get(item.project_id)
         requester_name = requester_map.get(item.requester_id, "系统管理员")
+        if item.requester_id and item.requester_id not in requester_map:
+            logger.warning("Requester id=%s not found in users table (purchase request id=%s), defaulting to '系统管理员'", item.requester_id, item.id)
 
         if current_user.role.value == "project_manager":
             # 项目经理看不到价格信息

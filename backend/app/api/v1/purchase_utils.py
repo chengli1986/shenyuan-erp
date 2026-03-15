@@ -5,7 +5,7 @@
 
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.models.purchase import (
     PurchaseRequest, PurchaseRequestItem, PurchaseStatus
@@ -23,8 +23,13 @@ def get_managed_project_ids(db: Session, current_user: User) -> Optional[List[in
     if current_user.role.value != "project_manager":
         return None
 
+    # Fall back to name-based matching when project_manager_id is NULL
+    # (handles rows created before the FK column was backfilled)
     managed_projects = db.query(Project.id).filter(
-        Project.project_manager_id == current_user.id
+        or_(
+            Project.project_manager_id == current_user.id,
+            Project.project_manager == current_user.name
+        )
     ).all()
 
     if managed_projects:
@@ -83,13 +88,12 @@ def enrich_purchase_item_details(db: Session, result: dict):
         contract_item_map = {ci.id: ci for ci in contract_items}
 
     # 批量获取已申购数量（按contract_item_id分组）
+    # NOTE: This intentionally sums ALL approved/completed purchases globally for each
+    # contract_item_id, matching the original per-item loop behavior. The current purchase
+    # request's own items are included in the sum because the remaining quantity should
+    # reflect the total already committed against the contract line item.
     purchased_qty_map = {}
     if contract_item_ids:
-        # 收集所有需要查询的item IDs
-        item_ids_for_sum = [
-            item.get('id') for item in result['items']
-            if item.get('item_type') == 'main' and item.get('contract_item_id')
-        ]
         purchased_rows = db.query(
             PurchaseRequestItem.contract_item_id,
             func.sum(PurchaseRequestItem.quantity)

@@ -155,7 +155,7 @@ async def upload_contract_excel(
             project_id=project_id,
             version_number=next_version_number,
             upload_user_name=current_user.name,
-            original_filename=Path(file.filename).name,
+            original_filename=file.filename,
             stored_filename=Path(file_path).name,
             file_size=Path(file_path).stat().st_size,
             upload_reason=upload_reason,

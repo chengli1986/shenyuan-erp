@@ -39,8 +39,8 @@ api.interceptors.response.use(
       // 延迟导入避免循环依赖
       import('./auth').then(({ authService }) => {
         authService.clearSession();
+        window.location.reload();
       });
-      window.location.reload();
     }
 
     return Promise.reject(error);

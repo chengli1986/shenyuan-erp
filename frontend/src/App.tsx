@@ -109,7 +109,7 @@ function AppContent() {
   }
 
   // 如果用户未登录，显示登录页面
-  if (!authService.isLoggedIn()) {
+  if (!currentUser) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
