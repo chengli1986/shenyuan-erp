@@ -43,7 +43,7 @@ def test_backend_health():
     try:
         response = requests.get(f"{BASE_URL}/health", timeout=5)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 def test_frontend_proxy():
@@ -51,7 +51,7 @@ def test_frontend_proxy():
     try:
         response = requests.get(f"{FRONTEND_URL}/health", timeout=5)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 def test_auth_login():
@@ -60,10 +60,10 @@ def test_auth_login():
         response = requests.post(f"{BASE_URL}/api/v1/auth/login", data={
             "username": "admin",
             "password": "admin123"
-        })
+        }, timeout=10)
         data = response.json()
         return "access_token" in data and data.get("user", {}).get("username") == "admin"
-    except:
+    except Exception:
         return False
 
 def test_purchase_list_api():
@@ -73,16 +73,16 @@ def test_purchase_list_api():
         login_response = requests.post(f"{BASE_URL}/api/v1/auth/login", data={
             "username": "admin",
             "password": "admin123"
-        })
+        }, timeout=10)
         token = login_response.json()["access_token"]
-        
+
         # 获取申购单列表
         headers = {"Authorization": f"Bearer {token}"}
-        response = requests.get(f"{BASE_URL}/api/v1/purchases/", headers=headers)
+        response = requests.get(f"{BASE_URL}/api/v1/purchases/", headers=headers, timeout=10)
         data = response.json()
-        
+
         return response.status_code == 200 and "items" in data
-    except:
+    except Exception:
         return False
 
 def test_project_manager_permission():
@@ -92,25 +92,25 @@ def test_project_manager_permission():
         login_response = requests.post(f"{BASE_URL}/api/v1/auth/login", data={
             "username": "sunyun",
             "password": "sunyun123"
-        })
-        
+        }, timeout=10)
+
         if login_response.status_code != 200:
             return False
-            
+
         token = login_response.json()["access_token"]
-        
+
         # 获取申购单列表
         headers = {"Authorization": f"Bearer {token}"}
-        response = requests.get(f"{BASE_URL}/api/v1/purchases/", headers=headers)
+        response = requests.get(f"{BASE_URL}/api/v1/purchases/", headers=headers, timeout=10)
         data = response.json()
-        
+
         # 验证只能看到项目2的申购单
         if response.status_code == 200 and "items" in data:
             project_ids = set([item["project_id"] for item in data["items"]])
             # 孙赟只能看到项目2的申购单
             return project_ids.issubset({2})
         return False
-    except:
+    except Exception:
         return False
 
 def test_purchase_workflow():
@@ -120,14 +120,14 @@ def test_purchase_workflow():
         login_response = requests.post(f"{BASE_URL}/api/v1/auth/login", data={
             "username": "admin",
             "password": "admin123"
-        })
+        }, timeout=10)
         token = login_response.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
-        
+
         # 获取申购单列表
-        response = requests.get(f"{BASE_URL}/api/v1/purchases/", headers=headers)
+        response = requests.get(f"{BASE_URL}/api/v1/purchases/", headers=headers, timeout=10)
         data = response.json()
-        
+
         if response.status_code == 200 and "items" in data:
             if len(data["items"]) > 0:
                 # 检查是否有各种状态的申购单
@@ -140,7 +140,7 @@ def test_purchase_workflow():
                 # 没有申购单也算通过（空数据库）
                 return True
         return False
-    except:
+    except Exception:
         return False
 
 def test_system_categories():
@@ -150,16 +150,16 @@ def test_system_categories():
         login_response = requests.post(f"{BASE_URL}/api/v1/auth/login", data={
             "username": "admin",
             "password": "admin123"
-        })
+        }, timeout=10)
         token = login_response.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
-        
+
         # 获取项目2的系统分类
         response = requests.get(
             f"{BASE_URL}/api/v1/purchases/system-categories/by-project/2",
-            headers=headers
+            headers=headers, timeout=10
         )
-        
+
         if response.status_code == 200:
             data = response.json()
             # 检查是否返回了系统分类
@@ -168,7 +168,7 @@ def test_system_categories():
             elif isinstance(data, dict) and "categories" in data:
                 return len(data["categories"]) > 0
         return False
-    except:
+    except Exception:
         return False
 
 def test_purchase_detail():
@@ -178,28 +178,28 @@ def test_purchase_detail():
         login_response = requests.post(f"{BASE_URL}/api/v1/auth/login", data={
             "username": "admin",
             "password": "admin123"
-        })
+        }, timeout=10)
         token = login_response.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
-        
+
         # 先获取列表找到一个ID
-        list_response = requests.get(f"{BASE_URL}/api/v1/purchases/", headers=headers)
+        list_response = requests.get(f"{BASE_URL}/api/v1/purchases/", headers=headers, timeout=10)
         items = list_response.json().get("items", [])
-        
+
         if items:
             # 获取第一个申购单的详情
             purchase_id = items[0]["id"]
             response = requests.get(
                 f"{BASE_URL}/api/v1/purchases/{purchase_id}",
-                headers=headers
+                headers=headers, timeout=10
             )
-            
+
             if response.status_code == 200:
                 data = response.json()
                 # 检查是否有必要字段
                 return "request_code" in data and "items" in data
         return False
-    except:
+    except Exception:
         return False
 
 def run_pytest_tests():
