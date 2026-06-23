@@ -44,8 +44,9 @@ purchase requisition workflow, system-test dashboard, material system classifica
 - Frontend uses Vite, not CRA — call APIs as relative `/api/v1/...` so the dev proxy applies.
 - Contract version endpoints are `/contract-versions/` (NOT `/versions/`).
 - File downloads must use fetch + blob, not direct anchor links.
-- CORS allowed origins live in `app/main.py`; add a new frontend origin there or the UI shows
-  "backend not connected".
+- CORS origins: localhost defaults in `core/config.py` (`backend_cors_origins`); production /
+  server origins come from the **untracked `backend/.env`** override (not hardcoded). Add a new
+  frontend origin in `backend/.env`, else the UI shows "backend not connected".
 - Project-level permission isolation: a project manager only sees/manages their own projects.
 - The system-test scheduler starts automatically as a background asyncio task on app startup.
 
