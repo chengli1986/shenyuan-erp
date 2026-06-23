@@ -31,9 +31,7 @@ class Settings(BaseSettings):
         "http://localhost:3001",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
-        "http://18.218.95.233:3000",
-        "http://18.218.95.233:3001",
-        "http://18.218.95.233:8080",
+        # 生产/服务器 origins 由 backend/.env 的 backend_cors_origins 覆盖(不在代码硬编码服务器 IP）
     ]
 
     # 数据库驱动和PostgreSQL配置（可选，从.env读取）

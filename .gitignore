@@ -247,3 +247,6 @@ docs/build/
 !README.md
 !backend/app/core/
 !.gitignore
+# Real frontend env — use .env.*.example as template (added 2026-06-23)
+frontend/.env.development
+frontend/.env.production
